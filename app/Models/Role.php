@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Spatie\Permission\Models\Role as SpatieRole;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use App\Models\Branch;
 use App\Models\User;
@@ -25,12 +26,12 @@ use App\Models\Permission;
  * @property int|null $branch_id
  * @property EloquentCollection|Permission[] $permissions
  * @property EloquentCollection|User[] $users
- */
+*/
 class Role extends SpatieRole
 {
-    use HasFactory, SoftDeletes, HasAuditFields;
+    use SoftDeletes, HasAuditFields;
 
-    protected $guard_name = 'web';
+    protected string $guard_name = 'web';
 
     protected $fillable = [
         'name',
@@ -79,6 +80,9 @@ class Role extends SpatieRole
         return $this->isSuperAdmin();
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\User, $this, \Illuminate\Database\Eloquent\Relations\Pivot, 'pivot'>
+     */
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
@@ -107,18 +111,29 @@ class Role extends SpatieRole
     /**
      * Branch this role belongs to (optional)
      */
-    public function branch()
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Branch, $this>
+     */
+    public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'branch_id');
     }
     // Hierarchy helper methods removed.
 
-    public function scopeActive($query)
+    /**
+     * @param Builder<$this> $query
+     * @return Builder<$this>
+     */
+    public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }
 
-    public function scopeByPriority($query)
+    /**
+     * @param Builder<$this> $query
+     * @return Builder<$this>
+     */
+    public function scopeByPriority(Builder $query): Builder
     {
         return $query->orderBy('priority', 'asc');
     }

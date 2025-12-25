@@ -70,6 +70,10 @@
         </button>
 
         {{-- User menu (avatar + name + dropdown) --}}
+        @php
+            /** @var \App\Models\User|null $user */
+            $user = auth()->user();
+        @endphp
         @auth
             <div class="user-menu">
                 <button
@@ -80,14 +84,14 @@
                     aria-expanded="false"
                 >
                     <div class="avatar">
-                        @if(Auth::user()->avatar)
-                            <img src="{{ asset('storage/'.Auth::user()->avatar) }}" alt="{{ Auth::user()->name }}'s avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />
+                        @if($user->avatar)
+                            <img src="{{ asset('storage/'.$user->avatar) }}" alt="{{ $user->name }}'s avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />
                         @else
-                            {{ strtoupper(substr(Auth::user()->name, 0, 2)) }}
+                            {{ strtoupper(substr($user->name, 0, 2)) }}
                         @endif
                     </div>
                     <span class="user-name">
-                        {{ Auth::user()->name }}
+                        {{ $user->name }}
                     </span>
                     <span class="user-menu-caret" data-feather="chevron-down"></span>
                 </button>
@@ -95,7 +99,7 @@
                 <div class="user-menu-dropdown" id="userMenuDropdown" role="menu">
 
                     {{-- Update Profile --}}
-                    <a href="{{ route('users.edit', Auth::user()->id) }}" class="dropdown-item" role="menuitem">
+                    <a href="{{ route('users.edit', $user->id) }}" class="dropdown-item" role="menuitem">
                         <span data-feather="user"></span>
                         <span>Update Profile</span>
                     </a>

@@ -28,8 +28,9 @@
 
                 {{-- Branch selection for Developers; hidden input for others --}}
                 @php
-                    $currentUser = Auth::user();
-                    $isDeveloper = $currentUser && $currentUser->isSuperAdmin();
+                    /** @var \App\Models\User|null $currentUser */
+                    $currentUser = auth()->user();
+                    $isDeveloper = $currentUser ? $currentUser->isSuperAdmin() : false;
                 @endphp
                 @if($isDeveloper)
                     <div>
@@ -46,7 +47,7 @@
                         <p class="muted" style="font-size:13px;margin-top:6px;">Assign this role to a specific branch. If left empty, role applies globally.</p>
                     </div>
                 @else
-                    <input type="hidden" name="branch_id" value="{{ Auth::user()->branch_id }}">
+                    <input type="hidden" name="branch_id" value="{{ $currentUser->branch_id }}">
                 @endif
 
                 {{-- Role Name (required) --}}

@@ -11,7 +11,10 @@
     </div>
 
     {{-- Status filter cards --}}
-    @php $__u = Auth::user(); @endphp
+    @php
+        /** @var \App\Models\User|null $currentUser */
+        $currentUser = auth()->user();
+    @endphp
     @php
         $currentStatus = request('status') ?? 'all';
         $baseParams = ['search' => request('search')];
@@ -253,17 +256,16 @@
             @forelse($roles as $role)
                 @php
                     // Hide the Developer role for non-developer and non-super-admin users
-                    $currentUser = Auth::user();
                     $isDeveloperRole = strtolower(trim($role->name ?? '')) === 'developer' || strtolower(trim($role->slug ?? '')) === 'developer';
                     $currentIsDeveloper = strtolower(trim($currentUser->role->name ?? '')) === 'developer';
-                    $currentIsSuperAdmin = $currentUser->isSuperAdmin();
+                    $currentIsSuperAdmin = $currentUser ? $currentUser->isSuperAdmin() : false;
                 @endphp
                 @if($isDeveloperRole && !$currentIsDeveloper && !$currentIsSuperAdmin)
                     @continue
                 @endif
                 @php
                     // Hide user's own role if they have edit permissions (prevents self-modification)
-                    $hideOwnRole = $__u && method_exists($__u, 'hasPermission') && $__u->hasPermission('roles.edit') && $__u->role_id === $role->id;
+                    $hideOwnRole = $currentUser && method_exists($currentUser, 'hasPermission') && $currentUser->hasPermission('roles.edit') && $currentUser->role_id === $role->id;
                 @endphp
                 @if(!$hideOwnRole)
                 <tr class="role-table-row"
@@ -277,7 +279,7 @@
                         <strong>{{ $role->name }}</strong>
                         <br>
                         <span style="font-size:13px; opacity:0.7;">{{ $role->slug }}</span>
-                        @if($role->deleted_at && (Auth::user()->isSuperAdmin() || Auth::user()->role?->slug === 'admin'))
+                        @if($role->deleted_at && ($currentUser && ($currentUser->isSuperAdmin() || $currentUser->role?->slug === 'admin')))
                             <br>
                             <span style="font-size:12px; color:#ef4444; opacity:0.8;">
                                 <span data-feather="user-x" style="width:12px;height:12px;"></span>
@@ -347,7 +349,7 @@
                         @if(!$role->isSuperAdmin())
                             @if($role->deleted_at)
                                 {{-- Restore button for deleted roles --}}
-                                @if($__u && method_exists($__u, 'hasPermission') && $__u->hasPermission('roles.restore'))
+                                @if($currentUser && method_exists($currentUser, 'hasPermission') && $currentUser->hasPermission('roles.restore'))
                                     <form action="{{ route('roles.restore', $role->id) }}"
                                           method="POST"
                                           style="display:inline-block;"
@@ -377,8 +379,8 @@
                                 {{-- Normal actions for non-deleted roles --}}
                                 @if(\Illuminate\Support\Facades\Gate::allows('managePermissions', $role))
                                 @php
-                                    $canEditPermissions = ($__u && method_exists($__u, 'hasPermission') && $__u->hasPermission('permissions.manage') || ($__u && method_exists($__u, 'isSuperAdmin') && $__u->isSuperAdmin())) &&
-                                                        ($__u ? $__u->role_id !== $role->id : false); // Cannot edit own role's permissions
+                                    $canEditPermissions = (($currentUser && method_exists($currentUser, 'hasPermission') && $currentUser->hasPermission('permissions.manage')) || ($currentUser && method_exists($currentUser, 'isSuperAdmin') && $currentUser->isSuperAdmin())) &&
+                                                        ($currentUser ? $currentUser->role_id !== $role->id : false); // Cannot edit own role's permissions
                                 @endphp
                                 <a
                                     href="{{ route('roles.permissions', $role->id) }}"
