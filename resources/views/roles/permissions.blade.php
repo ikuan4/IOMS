@@ -4,6 +4,7 @@
 
 @section('content')
     @php
+        /** @var \App\Models\User|null $__u */
         $__u = Auth::user();
         $canEdit = $__u && (
             (method_exists($__u, 'hasPermission') && $__u->hasPermission('permissions.manage')) ||

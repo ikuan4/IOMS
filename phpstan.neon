@@ -1,0 +1,18 @@
+includes:
+  - vendor/larastan/larastan/extension.neon
+
+parameters:
+  level: 8
+  paths:
+    - app
+  bootstrapFiles:
+    - vendor/autoload.php
+  inferPrivatePropertyTypeFromConstructor: true
+  # Exclude vendor, storage, and bootstrap cache from analysis
+  excludePaths:
+    - vendor/*
+    - storage/*
+    - bootstrap/cache/*
+
+services:
+  # Larastan provides many services; keep defaults for now

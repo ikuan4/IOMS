@@ -17,6 +17,10 @@ use App\Models\Permission;
  * @property string $name
  * @property string|null $email
  * @property string $password
+ * @property int|null $role_id
+ * @property int|null $branch_id
+ * @property bool $active
+ * @property \Illuminate\Database\Eloquent\Collection|Permission[] $permissions
  */
 class User extends Authenticatable
 {

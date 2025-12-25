@@ -12,17 +12,22 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Contracts\View\View as ContractView;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Collection;
 
 class RoleController extends Controller
 {
     use AuthorizesRequests;
 
-    public function index(Request $request)
+    public function index(Request $request): ContractView|JsonResponse
     {
         $this->authorize('viewAny', Role::class);
 
-        /** @var User $currentUser */
+        /** @var User|null $currentUser */
         $currentUser = Auth::user();
+        assert($currentUser instanceof User);
 
         // Build base query (without status/search) for counts and scoping
         $baseQuery = Role::with(['users', 'deletedBy', 'branch']);
@@ -55,18 +60,19 @@ class RoleController extends Controller
         // Now apply filters (status/search) to a fresh query cloned from base
         $query = (clone $baseQuery);
 
-        if ($request->has('status')) {
-            if ($request->status === 'active') {
+        $status = $request->query('status');
+        if ($status !== null) {
+            if ($status === 'active') {
                 $query->whereNull('deleted_at')->where('is_active', true);
-            } elseif ($request->status === 'inactive') {
+            } elseif ($status === 'inactive') {
                 $query->whereNull('deleted_at')->where('is_active', false);
-            } elseif ($request->status === 'deleted') {
+            } elseif ($status === 'deleted') {
                 $query->whereNotNull('deleted_at');
             }
         }
 
-        if ($request->has('search') && $request->search) {
-            $search = $request->search;
+        $search = $request->query('search');
+        if (is_string($search) && $search !== '') {
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                     ->orWhere('description', 'like', "%{$search}%")
@@ -76,7 +82,7 @@ class RoleController extends Controller
 
         // Respect per-page selection from query, with a safe whitelist and default 10
         $allowed = [5,10,15,20,30];
-        $perPage = (int) $request->query('per_page', 10);
+        $perPage = (int) ($request->query('per_page') ?? 10);
         if (!in_array($perPage, $allowed, true)) {
             $perPage = 10;
         }
@@ -84,8 +90,9 @@ class RoleController extends Controller
         $roles = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
 
         // Get users by role if requested (AJAX) — return normalized JSON shape
-        if ($request->has('role_id') && $request->ajax()) {
-            $role = Role::find($request->role_id);
+        $roleId = $request->query('role_id');
+        if ($roleId && $request->ajax()) {
+            $role = Role::find($roleId);
             $mapped = [];
             if ($role) {
                 $this->authorize('view', $role);
@@ -116,7 +123,7 @@ class RoleController extends Controller
         return view('roles.index', compact('roles', 'statusCounts'));
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         $this->authorize('create', Role::class);
         $validated = $request->validate([
@@ -136,7 +143,7 @@ class RoleController extends Controller
 
         $validated['slug'] = $slug;
         $validated['guard_name'] = 'web';
-        $validated['is_active'] = $request->has('is_active') ? 1 : 0;
+        $validated['is_active'] = $request->boolean('is_active');
 
         $role = Role::create($validated);
 
@@ -149,14 +156,14 @@ class RoleController extends Controller
             ->with('status', 'Role "' . $role->name . '" created successfully. Now set its hierarchy.');
     }
 
-    public function show(Role $role)
+    public function show(Role $role): ContractView
     {
         $this->authorize('view', $role);
         $role->load('users', 'permissions', 'branch');
         return view('roles.show', compact('role'));
     }
 
-    public function edit(Role $role)
+    public function edit(Role $role): ContractView
     {
         $this->authorize('update', $role);
         // Provide all permissions to the edit view so the checkboxes can render
@@ -169,7 +176,7 @@ class RoleController extends Controller
     /**
      * Show the form for creating a new role.
      */
-    public function create()
+    public function create(): ContractView
     {
         $this->authorize('create', Role::class);
         $permissions = Permission::orderBy('name')->get();
@@ -177,7 +184,7 @@ class RoleController extends Controller
         return view('roles.create', compact('permissions', 'branches'));
     }
 
-    public function update(Request $request, Role $role)
+    public function update(Request $request, Role $role): RedirectResponse
     {
         $this->authorize('update', $role);
 
@@ -187,7 +194,7 @@ class RoleController extends Controller
             'branch_id' => 'nullable|integer|exists:branches,id',
         ]);
 
-        $validated['is_active'] = (int) $request->input('is_active', 0);
+        $validated['is_active'] = $request->boolean('is_active');
 
         $baseSlug = Str::slug($validated['name']);
         $slug = $baseSlug;
@@ -207,7 +214,8 @@ class RoleController extends Controller
         // Branch assignment: Developer may choose branch; others get their own branch automatically
         try {
             $currentUser = Auth::user();
-            if ($currentUser && $currentUser->isSuperAdmin() && $request->filled('branch_id')) {
+            assert($currentUser instanceof User);
+            if ($currentUser->isSuperAdmin() && $request->filled('branch_id')) {
                 $role->branch_id = $request->input('branch_id');
             } else {
                 $role->branch_id = $currentUser->branch_id ?? null;
@@ -221,7 +229,7 @@ class RoleController extends Controller
             ->with('status', 'Role "' . $role->name . '" updated successfully.');
     }
 
-    public function destroy(Role $role)
+    public function destroy(Role $role): RedirectResponse
     {
         $this->authorize('delete', $role);
 
@@ -230,7 +238,9 @@ class RoleController extends Controller
                 ->with('error', 'Cannot delete protected role: ' . $role->name);
         }
 
-        if (Auth::user()->role_id === $role->id) {
+        $currentUser = Auth::user();
+        assert($currentUser instanceof User);
+        if ($currentUser->role_id === $role->id) {
             return redirect()->route('roles.index')
                 ->with('error', 'You cannot delete your own role.');
         }
@@ -248,15 +258,16 @@ class RoleController extends Controller
             ->with('deleted', 'Role "' . $name . '" deleted successfully.');
     }
 
-    public function restore($id)
+    public function restore(int $id): RedirectResponse
     {
-        if (!Auth::user()->hasPermission('roles.restore')) {
+        $currentUser = Auth::user();
+        assert($currentUser instanceof User);
+        if (!$currentUser->hasPermission('roles.restore')) {
             abort(403, 'Unauthorized action.');
         }
 
         $role = Role::withTrashed()->findOrFail($id);
 
-        $currentUser = Auth::user();
         if (!$currentUser->canManageRole($role)) {
             return redirect()->route('roles.index')
                 ->with('error', 'You do not have permission to restore this role.');
@@ -273,13 +284,14 @@ class RoleController extends Controller
             ->with('status', 'Role "' . $role->name . '" restored successfully.');
     }
 
-    public function managePriority(Request $request, Role $role)
+    public function managePriority(Request $request, Role $role): ContractView
     {
-        if (!Auth::user()->hasPermission('roles.manage-priority')) {
+        $currentUser = Auth::user();
+        assert($currentUser instanceof User);
+        if (!$currentUser->hasPermission('roles.manage-priority')) {
             abort(403, 'Unauthorized action.');
         }
 
-        $currentUser = Auth::user();
         $isDeveloper = $currentUser->isSuperAdmin();
 
         // Provide branches for the dropdown
@@ -287,7 +299,7 @@ class RoleController extends Controller
 
         // Determine selected branch: developer may choose via query, others default to their branch
         if ($isDeveloper) {
-            $selectedBranchId = $request->query('branch_id', $branches->first()?->id ?? null);
+            $selectedBranchId = $request->query('branch_id') ?? ($branches->first()?->id ?? null);
             $rolesForView = $selectedBranchId
                 ? Role::where('branch_id', $selectedBranchId)->orderBy('priority', 'asc')->get()
                 : collect([]);
@@ -305,7 +317,11 @@ class RoleController extends Controller
         return view('roles.hierarchy', compact('role', 'branches', 'selectedBranchId', 'rolesForView', 'isDeveloper', 'isHierarchyPage'));
     }
 
-    private function sortRolesByHierarchy($roles)
+    /**
+     * @param Collection<int, Role> $roles
+     * @return Collection<int, Role>
+     */
+    private function sortRolesByHierarchy(Collection $roles): Collection
     {
         // Hierarchy removed — fall back to ordering by priority then name
         return $roles->sortBy(function ($r) {
@@ -313,7 +329,12 @@ class RoleController extends Controller
         })->values();
     }
 
-    private function getVisibleRoleTree($userRole, $allRoles)
+    /**
+     * @param Role $userRole
+     * @param Collection<int, Role> $allRoles
+     * @return int[]
+     */
+    private function getVisibleRoleTree(Role $userRole, Collection $allRoles): array
     {
         $visibleIds = [$userRole->id];
         if (method_exists($userRole, 'getAllDescendantIds') && \Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
@@ -324,9 +345,11 @@ class RoleController extends Controller
         return array_unique($visibleIds);
     }
 
-    public function updatePriority(Request $request)
+    public function updatePriority(Request $request): RedirectResponse
     {
-        if (!Auth::user()->hasPermission('roles.manage-priority')) {
+        $currentUser = Auth::user();
+        assert($currentUser instanceof User);
+        if (!$currentUser->hasPermission('roles.manage-priority')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -352,8 +375,7 @@ class RoleController extends Controller
             return back()->with('success', 'Role priorities updated successfully. ' . $updatedCount . ' role(s) updated.');
         }
 
-        $currentUser = Auth::user();
-
+        
         $updatedCount = 0;
         foreach ($validated['parents'] as $roleId => $data) {
             $role = Role::find($roleId);
@@ -407,7 +429,7 @@ class RoleController extends Controller
         return back()->with('success', 'Role hierarchy updated successfully. ' . $updatedCount . ' role(s) updated.');
     }
 
-    private function wouldCreateCircularOrRedundant($roleId, $parentId)
+    private function wouldCreateCircularOrRedundant(int $roleId, int $parentId): bool
     {
         if (!\Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
             return false;
@@ -449,11 +471,12 @@ class RoleController extends Controller
         return false;
     }
 
-    public function managePermissions(Role $role)
+    public function managePermissions(Role $role): ContractView
     {
         $this->authorize('managePermissions', $role);
 
         $currentUser = Auth::user();
+        assert($currentUser instanceof User);
         $user = $currentUser;
         $isSuperAdmin = $user->isSuperAdmin();
 
@@ -480,7 +503,7 @@ class RoleController extends Controller
         return view('roles.permissions', compact('role', 'permissions', 'rolePermissions', 'isSuperAdmin', 'userPermissionIds'));
     }
 
-    public function updatePermissions(Request $request, Role $role)
+    public function updatePermissions(Request $request, Role $role): RedirectResponse
     {
         $this->authorize('updatePermissions', $role);
 
@@ -501,6 +524,7 @@ class RoleController extends Controller
         Log::info('After validation', [ 'requestedPermissions' => $requestedPermissions, ]);
 
         $currentUser = Auth::user();
+        assert($currentUser instanceof User);
         if (!$currentUser->isSuperAdmin()) {
             $userPermissionIds = $currentUser->getAllPermissions()->pluck('id')->toArray();
 
@@ -531,7 +555,7 @@ class RoleController extends Controller
 
         Log::info('Calling syncPermissions', [ 'role_id' => $role->id, 'oldPermissions' => $oldPermissions, 'newPermissions' => $requestedPermissions, ]);
 
-        $permissions = \App\Models\Permission::whereIn('id', $requestedPermissions)->get();
+        $permissions = Permission::whereIn('id', $requestedPermissions)->get();
         $role->syncPermissions($permissions);
 
         Log::info('After syncPermissions', [ 'role_id' => $role->id, 'permissions_count' => $role->permissions()->count(), 'permissions' => $role->permissions()->pluck('id')->toArray(), ]);

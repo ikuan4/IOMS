@@ -8,10 +8,23 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use App\Models\Branch;
+use App\Models\User;
+use App\Models\Permission;
 
 /**
  * Role model (hierarchy removed) with audit fields.
+ *
+ * @property int $id
+ * @property string $name
+ * @property string|null $slug
+ * @property string|null $description
+ * @property bool $is_active
+ * @property int|null $priority
+ * @property int|null $branch_id
+ * @property EloquentCollection|Permission[] $permissions
+ * @property EloquentCollection|User[] $users
  */
 class Role extends SpatieRole
 {
@@ -26,6 +39,13 @@ class Role extends SpatieRole
         'is_active',
         'priority',
         'branch_id',
+    ];
+    
+    protected $casts = [
+        'guard_name' => 'string',
+        'is_active' => 'boolean',
+        'priority' => 'integer',
+        'branch_id' => 'integer',
     ];
 
     /**
@@ -59,7 +79,7 @@ class Role extends SpatieRole
         return $this->isSuperAdmin();
     }
 
-    public function users(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
             ->withTimestamps();
@@ -79,7 +99,7 @@ class Role extends SpatieRole
         }
 
         // Get IDs assigned via users.role_id foreign key
-        $directIds = \App\Models\User::where('role_id', $this->id)->pluck('id')->toArray();
+        $directIds = User::where('role_id', $this->id)->pluck('id')->toArray();
 
         return count(array_unique(array_merge($pivotIds, $directIds)));
     }
