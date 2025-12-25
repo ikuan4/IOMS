@@ -1,0 +1,123 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Permission;
+use App\Models\Role;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Seeder;
+
+class RolePermissionSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        $permissions = [
+            ['name' => 'View Users', 'slug' => 'users.view', 'group' => 'users', 'guard_name' => 'web'],
+            ['name' => 'Create New User', 'slug' => 'users.create', 'group' => 'users', 'guard_name' => 'web'],
+            ['name' => 'Edit User Details', 'slug' => 'users.edit', 'group' => 'users', 'guard_name' => 'web'],
+            ['name' => 'Delete Users', 'slug' => 'users.delete', 'group' => 'users', 'guard_name' => 'web'],
+            ['name' => 'Assign Roles to Users', 'slug' => 'users.assign-roles', 'group' => 'users', 'guard_name' => 'web'],
+
+            ['name' => 'View Roles', 'slug' => 'roles.view', 'group' => 'roles', 'guard_name' => 'web'],
+            ['name' => 'Create New Role', 'slug' => 'roles.create', 'group' => 'roles', 'guard_name' => 'web'],
+            ['name' => 'Edit Role Details', 'slug' => 'roles.edit', 'group' => 'roles', 'guard_name' => 'web'],
+            ['name' => 'Delete Roles', 'slug' => 'roles.delete', 'group' => 'roles', 'guard_name' => 'web'],
+            ['name' => 'Manage Role Hierarchy', 'slug' => 'roles.manage-priority', 'group' => 'roles', 'guard_name' => 'web'],
+
+            ['name' => 'View Permissions', 'slug' => 'permissions.view', 'group' => 'permissions', 'guard_name' => 'web'],
+            ['name' => 'Create New Permission', 'slug' => 'permissions.create', 'group' => 'permissions', 'guard_name' => 'web'],
+            ['name' => 'Edit Permission Details', 'slug' => 'permissions.edit', 'group' => 'permissions', 'guard_name' => 'web'],
+            ['name' => 'Delete Permissions', 'slug' => 'permissions.delete', 'group' => 'permissions', 'guard_name' => 'web'],
+
+            ['name' => 'View Contract Types', 'slug' => 'contract-types.view', 'group' => 'contract-types', 'guard_name' => 'web'],
+            ['name' => 'Create New Contract Type', 'slug' => 'contract-types.create', 'group' => 'contract-types', 'guard_name' => 'web'],
+            ['name' => 'Edit Contract Type Details', 'slug' => 'contract-types.edit', 'group' => 'contract-types', 'guard_name' => 'web'],
+            ['name' => 'Delete Contract Types', 'slug' => 'contract-types.delete', 'group' => 'contract-types', 'guard_name' => 'web'],
+
+            ['name' => 'View Contracts', 'slug' => 'contracts.view', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Create New Contract', 'slug' => 'contracts.create', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Edit Contract Details', 'slug' => 'contracts.edit', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Delete Contracts', 'slug' => 'contracts.delete', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Restore Deleted Contracts', 'slug' => 'contracts.restore', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Manage Contract Reminders', 'slug' => 'contracts.manage-reminders', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'View Contract Versions', 'slug' => 'contracts.versions.view', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Create Contract Versions', 'slug' => 'contracts.versions.create', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Edit Contract Versions', 'slug' => 'contracts.versions.edit', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Delete Contract Versions', 'slug' => 'contracts.versions.delete', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Restore Contract Versions', 'slug' => 'contracts.versions.restore', 'group' => 'contracts', 'guard_name' => 'web'],
+            ['name' => 'Export and Download Contracts', 'slug' => 'contracts.export', 'group' => 'contracts', 'guard_name' => 'web'],
+
+            ['name' => 'View Notification Recipients', 'slug' => 'notification-recipients.view', 'group' => 'notifications', 'guard_name' => 'web'],
+            ['name' => 'Create New Recipient', 'slug' => 'notification-recipients.create', 'group' => 'notifications', 'guard_name' => 'web'],
+            ['name' => 'Edit Recipient Details', 'slug' => 'notification-recipients.edit', 'group' => 'notifications', 'guard_name' => 'web'],
+            ['name' => 'Delete Recipients', 'slug' => 'notification-recipients.delete', 'group' => 'notifications', 'guard_name' => 'web'],
+            ['name' => 'Manage Notifications', 'slug' => 'notifications.manage', 'group' => 'notifications', 'guard_name' => 'web'],
+        ];
+
+        foreach ($permissions as $permission) {
+            \Illuminate\Support\Facades\DB::table('permissions')->updateOrInsert(
+                ['slug' => $permission['slug']],
+                $permission
+            );
+        }
+
+        // Ensure a single Developer role exists, but use DB operations to be schema-safe
+        $roleData = ['name' => 'Developer'];
+        if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'slug')) {
+            $roleData['slug'] = 'developer';
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'description')) {
+            $roleData['description'] = 'Developer role with full permissions';
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'is_active')) {
+            $roleData['is_active'] = true;
+        }
+
+        \Illuminate\Support\Facades\DB::table('roles')->updateOrInsert(
+            ['name' => 'Developer'],
+            array_merge($roleData, ['updated_at' => now(), 'created_at' => now()])
+        );
+
+        $developerRoleId = \Illuminate\Support\Facades\DB::table('roles')->where('name', 'Developer')->value('id');
+
+        // Assign all permissions to Developer in pivot table
+        $permissionIds = \Illuminate\Support\Facades\DB::table('permissions')->pluck('id')->all();
+
+        // Clear other role_has_permissions and model_has_roles entries
+        \Illuminate\Support\Facades\DB::table('role_has_permissions')->where('role_id', '!=', $developerRoleId)->delete();
+        \Illuminate\Support\Facades\DB::table('model_has_roles')->where('role_id', '!=', $developerRoleId)->delete();
+        // Delete other roles (schema may not have the extra columns, so use DB)
+        \Illuminate\Support\Facades\DB::table('roles')->where('id', '!=', $developerRoleId)->delete();
+
+        // Insert role_has_permissions entries for Developer
+        foreach ($permissionIds as $pid) {
+            \Illuminate\Support\Facades\DB::table('role_has_permissions')->updateOrInsert([
+                'role_id' => $developerRoleId,
+                'permission_id' => $pid,
+            ], []);
+        }
+
+        // Assign Developer role to user id 1 if that user exists (use model relations if available)
+        $user1 = User::find(1);
+        if ($user1) {
+            // try to use available relation but fall back to direct DB insert
+            if (method_exists($user1, 'customRoles')) {
+                $user1->customRoles()->syncWithoutDetaching([$developerRoleId]);
+            } elseif (method_exists($user1, 'roles')) {
+                $user1->roles()->syncWithoutDetaching([$developerRoleId]);
+            } else {
+                \Illuminate\Support\Facades\DB::table('model_has_roles')->updateOrInsert([
+                    'role_id' => $developerRoleId,
+                    'model_id' => $user1->id,
+                ], ['model_type' => get_class($user1), 'created_at' => now(), 'updated_at' => now()]);
+            }
+        }
+
+        $this->command->info('✓ Permissions seeded and Developer role created/ensured as primary role.');
+        $this->command->info('✓ All other roles removed; Developer assigned to User ID 1 if present.');
+    }
+}

@@ -7,6 +7,9 @@
         .user-menu-toggle { display:inline-flex; gap:10px; align-items:center; background:transparent; border:0; padding:6px 8px; cursor:pointer; color:var(--text); }
         .user-menu .avatar { width:40px; height:40px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:white; font-weight:700; }
         .user-menu .user-name { margin-left:6px; font-weight:700; color:var(--text); }
+        /* Make the sidebar toggle (hamburger) theme-aware */
+        #sidebarToggle { color: var(--text); }
+        #sidebarToggle svg { stroke: currentColor; fill: none; }
         /* Ensure feather/inline svgs inherit theme color */
         .user-menu-toggle svg, .user-menu .user-menu-caret svg, .user-menu-dropdown .dropdown-item svg { stroke: currentColor; fill: none; }
         .user-menu-dropdown { position:absolute; right:0; top:52px; background:var(--card); border-radius:8px; box-shadow:0 8px 30px rgba(0,0,0,0.12); min-width:220px; overflow:hidden; display:none; z-index:200; }
@@ -77,7 +80,11 @@
                     aria-expanded="false"
                 >
                     <div class="avatar">
-                        {{ strtoupper(substr(Auth::user()->name, 0, 2)) }}
+                        @if(Auth::user()->avatar)
+                            <img src="{{ asset('storage/'.Auth::user()->avatar) }}" alt="{{ Auth::user()->name }}'s avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />
+                        @else
+                            {{ strtoupper(substr(Auth::user()->name, 0, 2)) }}
+                        @endif
                     </div>
                     <span class="user-name">
                         {{ Auth::user()->name }}
@@ -98,10 +105,10 @@
                     <form
                         method="POST"
                         action="{{ route('logout') }}"
-                        onsubmit="return confirm('Are you sure you want to log out?');"
+                        id="logout-form"
                     >
                         @csrf
-                        <button type="submit" class="dropdown-item" role="menuitem">
+                        <button type="button" class="dropdown-item" role="menuitem" onclick="showConfirm('Logout', 'Are you sure you want to log out?', function(){ document.getElementById('logout-form').submit(); });">
                             <span data-feather="log-out"></span>
                             <span>Logout</span>
                         </button>

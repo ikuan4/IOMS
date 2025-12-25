@@ -17,32 +17,28 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Ensure a clean state for roles and users so Developer and FrancisJr are primary
+        \Illuminate\Support\Facades\DB::table('role_has_permissions')->delete();
+        \Illuminate\Support\Facades\DB::table('model_has_roles')->delete();
+        \Illuminate\Support\Facades\DB::table('role_hierarchies')->delete();
+        \Illuminate\Support\Facades\DB::table('users')->delete();
+        \Illuminate\Support\Facades\DB::table('roles')->delete();
 
-        $branch = Branch::create([
-            'name' => 'Main Branch',
-            'created_by' => null,
-            'updated_by' => null,
-        ]);
+        // Optionally recreate a main branch (not required for Developer)
+        $branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['created_by' => null, 'updated_by' => null]);
 
-        $role = Role::create([
-            'name' => 'Administrator',
-            'branch_id' => $branch->id,
-            'created_by' => null,
-            'updated_by' => null,
-        ]);
+        // Seed permissions and Developer role first
+        $this->call(\Database\Seeders\RolePermissionSeeder::class);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'mobile' => '0123456789',
-            'last_updated_at' => now(),
-            'last_updated_by' => null,
-            'branch_id' => $branch->id,
-            'role_id' => $role->id,
-        ]);
+        // Create FrancisJr user and remove any other users within the Developer seeder
+        $this->call(\Database\Seeders\DeveloperUserSeeder::class);
 
-        // Create developer role and default admin-like user
-        $this->call(DeveloperUserSeeder::class);
+        // Create branches, dummy roles and dummy users
+        $this->call(\Database\Seeders\BranchSeeder::class);
+        $this->call(\Database\Seeders\DummyRolesSeeder::class);
+        $this->call(\Database\Seeders\DummyUsersSeeder::class);
+
+        // Canonical permissions seeder (run manually when ready):
+        // $this->call(\Database\Seeders\CanonicalPermissionsSeeder::class);
     }
 }

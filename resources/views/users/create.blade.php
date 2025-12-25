@@ -20,7 +20,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('users.store') }}" class="user-form">
+    <form method="POST" action="{{ route('users.store') }}" class="user-form" enctype="multipart/form-data">
         @include('users._form')
     </form>
 @endsection

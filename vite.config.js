@@ -9,7 +9,10 @@ export default defineConfig({
                 'resources/css/app.css',
                 'resources/js/app.js',
                 'resources/css/login.css',
-                'resources/js/login.js'
+                'resources/js/login.js',
+                // dashboard-specific assets used via @vite in Blade
+                'resources/css/dashboard.css',
+                'resources/js/dashboard.js'
             ],
             refresh: true,
         }),

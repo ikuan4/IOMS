@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\RoleController; // Added RoleController import
 
 // Landing → login page
 Route::get('/', function () {
@@ -59,10 +60,37 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware('auth')->name('dashboard');
 
+// Roles management (requires auth)
+Route::middleware('auth')->group(function () {
+    Route::resource('roles', RoleController::class); // Register roles resource routes
+
+    // Role restore
+    Route::post('/roles/{id}/restore', [RoleController::class, 'restore'])
+        ->name('roles.restore');
+
+    // Role hierarchy (manage priority)
+    Route::get('/roles/{role}/hierarchy', [RoleController::class, 'managePriority'])
+        ->name('roles.hierarchy');
+    Route::post('/roles/hierarchy/update', [RoleController::class, 'updatePriority'])
+        ->name('roles.hierarchy.update');
+
+    // Role permissions management
+    Route::get('/roles/{role}/permissions', [RoleController::class, 'managePermissions'])
+        ->name('roles.permissions');
+    Route::post('/roles/{role}/permissions', [RoleController::class, 'updatePermissions'])
+        ->name('roles.permissions.update');
+});
 
 // User management (copied from mshcscontr) — requires auth
 Route::middleware('auth')->group(function () {
     Route::resource('users', UserController::class);
     Route::post('users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
+});
+
+// Branch management (requires auth)
+Route::middleware('auth')->group(function () {
+    Route::resource('branches', App\Http\Controllers\BranchController::class);
+    Route::get('branches/{branch}/export', [App\Http\Controllers\BranchController::class, 'export'])->name('branches.export');
+    Route::post('branches/{branch}/restore', [App\Http\Controllers\BranchController::class, 'restore'])->name('branches.restore');
 });
 

@@ -96,18 +96,19 @@
             <input type="text" name="search" id="userSearchInput" value="{{ $search }}" placeholder="Search by name, mobile, or email..." oninput="filterUsersRealtime()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
         </form>
 
-        @can('create', \App\Models\User::class)
+        @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('create', \App\Models\User::class))
         <a href="{{ route('users.create') }}" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
             <span data-feather="user-plus"></span>
             Add User
         </a>
-        @endcan
+        @endif
     </div>
 
     <div class="card" style="margin-top:12px; overflow-x:auto;">
         <table style="width:100%; border-collapse:collapse;">
             <thead>
             <tr style="text-align:left; border-bottom:1px solid #e5e7eb;">
+                <th style="padding:8px; width:64px;">Avatar</th>
                 <th style="padding:8px;">Name</th>
                 <th style="padding:8px;">Role</th>
                 <th style="padding:8px;">Mobile</th>
@@ -120,6 +121,15 @@
             @forelse ($users as $user)
                 @php $isDeleted = !is_null($user->deleted_at); @endphp
                 <tr class="user-table-row" style="border-bottom:1px solid #f3f4f6; height:62px; {{ $isDeleted ? 'opacity:1;' : '' }}" data-name="{{ strtolower($user->name) }}" data-mobile="{{ strtolower($user->mobile) }}" data-email="{{ strtolower($user->email) }}">
+                    <td style="padding:8px; vertical-align:middle;">
+                        @if($user->avatar)
+                            <img src="{{ asset('storage/'.$user->avatar) }}" alt="{{ $user->name }}'s avatar" style="width:40px;height:40px;border-radius:8px;object-fit:cover;display:block;" />
+                        @else
+                            <div style="width:40px;height:40px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            </div>
+                        @endif
+                    </td>
                     <td style="padding:8px;">{{ $user->name }}</td>
                     <td style="padding:8px;">
                         @if($user->role)
@@ -133,24 +143,24 @@
                     <td style="padding:8px;">@if($isDeleted)<span style="color:#f10101;font-weight:600;">Deleted</span>@else @if($user->active)<span style="color:#16a34a;font-weight:600;">Active</span>@else<span style="color:#dc2626;font-weight:600;">Deactivated</span>@endif @endif</td>
                     <td style="padding:8px; text-align:right; white-space:nowrap;">
                         @if(!$isDeleted)
-                            @can('update', $user)
+                            @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('update', $user))
                             <a href="{{ route('users.edit', $user) }}" style="background:#e0f2fe;color:#0369a1;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-right:6px;text-decoration:none;" title="Edit user"><span data-feather="edit"></span></a>
-                            @endcan
-                            @can('delete', $user)
+                            @endif
+                            @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('delete', $user))
                             <form action="{{ route('users.destroy', $user) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete User', subtitle: 'This will soft delete the user', message: 'Are you sure you want to delete {{ $user->name }}? This action can be reversed later.', confirmText: 'Delete User', form: this});">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" style="background:#fee2e2;color:#b91c1c;padding:10px 12px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;" title="Soft delete user"><span data-feather="trash-2"></span></button>
                             </form>
-                            @endcan
+                            @endif
                         @else
-                            @can('restore', $user)
+                            @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('restore', $user))
                             <form action="{{ route('users.restore', $user->id) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'restore', title: 'Restore User', subtitle: 'This will restore the user', message: 'Are you sure you want to restore {{ $user->name }}? The user will be active again.', confirmText: 'Restore User', form: this});">
                                 @csrf
                                 @if(!empty($search))<input type="hidden" name="search" value="{{ $search }}">@endif
                                 <button type="submit" style="background:#dcfce7;color:#15803d;padding:10px 12px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;" title="Restore user"><span data-feather="rotate-ccw"></span></button>
                             </form>
-                            @endcan
+                            @endif
                         @endif
                     </td>
                 </tr>

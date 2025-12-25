@@ -7,6 +7,7 @@ use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
@@ -102,6 +103,7 @@ class UserController extends Controller
             'mobile' => ['required', 'string', 'max:50', 'unique:users,mobile'],
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'avatar' => ['nullable', 'image', 'max:2048'],
             'active' => ['nullable', 'boolean'],
             'role_id' => ['required', 'exists:roles,id'],
         ]);
@@ -115,10 +117,23 @@ class UserController extends Controller
             }
         }
 
+        // Server-side safety: allow assigning Developer role only when the
+        // authenticated user's primary role is Developer.
+        $selectedRole = Role::find($data['role_id']);
+        $selectedIsDeveloper = $selectedRole && strtolower(trim($selectedRole->name)) === 'developer';
+        $currentIsDeveloper = $currentUser && strtolower(trim(optional($currentUser->role)->name ?? '')) === 'developer';
+        if ($selectedIsDeveloper && !$currentIsDeveloper) {
+            return redirect()->back()->withInput()->with('error', 'You cannot assign the Developer role.');
+        }
+
         $user = new User();
         $user->name = $data['name'];
         $user->mobile = $data['mobile'];
         $user->email = $data['email'] ?? null;
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('avatars', 'public');
+            $user->avatar = $path;
+        }
         $user->active = $request->boolean('active', true);
         $user->password = Hash::make($data['password']);
         $user->role_id = $data['role_id'];
@@ -153,6 +168,7 @@ class UserController extends Controller
             'mobile' => ['required', 'string', 'max:50', Rule::unique('users', 'mobile')->ignore($user->id)],
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'avatar' => ['nullable', 'image', 'max:2048'],
             'active' => ['nullable', 'boolean'],
             'reset_bounce' => ['nullable', 'boolean'],
             'role_id' => ['required', 'exists:roles,id'],
@@ -167,6 +183,15 @@ class UserController extends Controller
             }
         }
 
+        // Server-side safety: allow assigning Developer role only when the
+        // authenticated user's primary role is Developer.
+        $selectedRole = Role::find($data['role_id']);
+        $selectedIsDeveloper = $selectedRole && strtolower(trim($selectedRole->name)) === 'developer';
+        $currentIsDeveloper = $currentUser && strtolower(trim(optional($currentUser->role)->name ?? '')) === 'developer';
+        if ($selectedIsDeveloper && !$currentIsDeveloper) {
+            return redirect()->back()->withInput()->with('error', 'You cannot assign the Developer role.');
+        }
+
         $user->name = $data['name'];
         $user->mobile = $data['mobile'];
         $user->email = $data['email'] ?? null;
@@ -175,6 +200,14 @@ class UserController extends Controller
 
         if (!empty($data['password'])) {
             $user->password = Hash::make($data['password']);
+        }
+
+        if ($request->hasFile('avatar')) {
+            // remove old avatar when replacing
+            if ($user->avatar) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $user->avatar = $request->file('avatar')->store('avatars', 'public');
         }
 
         if ($request->boolean('reset_bounce')) {

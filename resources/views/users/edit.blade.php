@@ -20,7 +20,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('users.update', $user) }}" class="user-form">
+    <form method="POST" action="{{ route('users.update', $user) }}" class="user-form" enctype="multipart/form-data">
         @method('PUT')
         @include('users._form')
     </form>
