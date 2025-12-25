@@ -16,9 +16,27 @@ return new class extends Migration
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
+            $table->string('mobile')->unique();
+            $table->timestamp('mobile_verified_at')->nullable();
             $table->string('password');
+            $table->boolean('active')->default(true);
+            $table->unsignedInteger('email_bounce_count')->default(0);
+            $table->timestamp('email_bounced_at')->nullable();
             $table->rememberToken();
             $table->timestamps();
+            $table->softDeletes();
+
+            // Optional audit / relational fields (use indexes here; add FK constraints in later migration)
+            $table->foreignId('last_updated_by')->nullable()->index();
+            $table->timestamp('last_updated_at')->nullable();
+
+            $table->foreignId('role_id')->nullable()->index();
+            $table->foreignId('branch_id')->nullable()->index();
+
+            $table->foreignId('created_by')->nullable()->index();
+            $table->foreignId('updated_by')->nullable()->index();
+            $table->foreignId('deleted_by')->nullable()->index();
+            $table->foreignId('restored_by')->nullable()->index();
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {

@@ -1,0 +1,279 @@
+/* resources/css/login.css
+   Login-only styles scoped under .layout-root so they don't affect other pages.
+*/
+
+:root{
+  --card-bg: #ffffff;
+  --page-bg: #f8fafc;
+  --muted: #6b7280;
+  --accent: #16a34a;
+  --card-radius: 12px;
+  --shadow: 0 8px 24px rgba(16,24,40,0.06);
+  --max-width: 1100px;
+  --form-max-width: 520px;
+}
+
+/* Page wrapper - scoped */
+.layout-root{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:32px;
+  background:var(--page-bg);
+}
+
+/* Card wrapper */
+.layout-root .login-card{
+  width:100%;
+  max-width:var(--max-width);
+  background:var(--card-bg);
+  border-radius:var(--card-radius);
+  display:flex;
+  overflow:hidden;
+  box-shadow:var(--shadow);
+}
+
+/* Left + right sections */
+.layout-root .login-left,
+.layout-root .login-right{
+  flex:1;
+  /* increased padding by 20% to raise card height */
+  padding:48px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+/* Constrain form width */
+.layout-root .form-wrap{
+  max-width:var(--form-max-width);
+  width:100%;
+  margin:auto;
+}
+
+/* Toggle buttons (mobile/email) */
+.auth-toggle .toggle-buttons{
+  display:inline-flex;
+  background:#f1f5f9;
+  border-radius:999px;
+  padding:4px;
+  gap:6px;
+}
+.auth-toggle .toggle-btn{
+  background:transparent;
+  border:0;
+  padding:6px 12px;
+  border-radius:999px;
+  cursor:pointer;
+  font-weight:600;
+  color:var(--muted);
+}
+.auth-toggle .toggle-btn.active{
+  background:var(--accent);
+  color:white;
+}
+
+/* Toggle label (sign in with) */
+.auth-toggle .toggle-label{
+  font-size:14px;
+  color:var(--muted);
+}
+
+/* Branding */
+.layout-root .brand{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  margin-bottom:18px;
+}
+.layout-root .brand img{
+  width:64px;
+  height:64px;
+  object-fit:contain;
+}
+.layout-root .brand .title{
+  font-weight:700;
+  font-size:18px;
+  color:var(--muted);
+}
+
+/* Ensure the text next to the logo is vertically centered to the
+   middle of the logo height. The inner wrapper is forced to use
+   flex alignment so multi-line text aligns correctly with the image. */
+.layout-root .brand > div{
+  display:flex;
+  align-items:center;
+}
+.layout-root .brand .title{
+  line-height:1;
+}
+
+/* Ensure robust vertical centering next to the logo: make the text
+   wrapper the same height as the logo and center its contents. This
+   handles font-size differences and multi-line titles. */
+.layout-root .brand img{ display:block; }
+
+/* Brand text block: stack the two title lines and center the
+   'SOCIETY' line so it sits visually under the preceding text. */
+.layout-root .brand > .brand-text{
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  height:64px;
+}
+.layout-root .brand .title-line,
+.layout-root .brand .title-society{
+  font-weight:700;
+  font-size:20px;
+  color:var(--muted);
+  margin:0;
+  line-height:1;
+}
+.layout-root .brand .title-society{
+  text-align:center;
+  transform:none;
+}
+
+/* Headings */
+.layout-root .login-left h2,
+.layout-root h1#login-heading{
+  margin:0 0 16px 0;
+  font-size:20px;
+  font-weight:600;
+}
+
+/* Form */
+.layout-root .form-group{
+  margin-bottom:14px;
+}
+
+/* Increase space after the mobile help text so the gap to the next
+   label (Password) is 50% larger. This targets only the mobile-help
+   element so other form-group spacing stays unchanged. */
+.layout-root #mobile-help{
+  margin-bottom:21px;
+}
+
+/* Increase space after the password help text so the gap to the
+   remember-row is 50% larger. */
+.layout-root #password-help{
+  margin-bottom:21px;
+}
+.layout-root .form-group label{
+  font-size:13px;
+  margin-bottom:6px;
+  display:block;
+  color:var(--muted);
+}
+
+/* Slightly larger Password label to improve readability */
+.layout-root label[for="password"]{
+  font-size:14px;
+}
+
+/* Match the Password label size for mobile and email labels */
+.layout-root label[for="mobile"],
+.layout-root label[for="email"]{
+  font-size:14px;
+}
+
+.layout-root .input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:8px;
+  border:1px solid #e6e9ee;
+  background:#fff;
+  font-size:14px;
+}
+.layout-root .input:focus{
+  border-color:var(--accent);
+  outline:none;
+  box-shadow:0 0 0 4px rgba(22,163,74,.1);
+}
+
+/* Remember me */
+.layout-root .remember-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:13px;
+  color:var(--muted);
+  margin-bottom:12px;
+}
+
+/* Button */
+.layout-root .btn-submit{
+  width:100%;
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  background:var(--accent);
+  color:white;
+  font-weight:600;
+  cursor:pointer;
+  box-shadow:0 6px 18px rgba(16,24,40,0.08);
+}
+.layout-root .btn-submit:hover{
+  filter:brightness(0.95);
+}
+
+/* Divider */
+.layout-root .divider{
+  text-align:center;
+  color:var(--muted);
+  margin:20px 0;
+  font-size:13px;
+}
+
+/* Helper text */
+.layout-root .helper{
+  text-align:center;
+  font-size:13px;
+  color:var(--muted);
+}
+
+/* Right side illustration background */
+.layout-root .login-right{
+  background:linear-gradient(180deg, #ffffff 0%, #fbfffb 100%);
+  align-items:center;
+}
+.layout-root .login-right .illustration{
+  width:100%;
+  max-width:460px;
+}
+
+/* Responsive */
+@media(max-width:860px){
+  .layout-root .login-card{
+    flex-direction:column;
+  }
+  .layout-root .login-left,
+  .layout-root .login-right{
+    /* increased responsive padding by 20% */
+    padding:24px;
+  }
+}
+
+/* Make theme-toggle icons & text white when dark theme is active
+   Scoped selector — only affects elements within login when present.
+*/
+[data-theme="dark"] .layout-root .theme-toggle{
+  color: #ffffff !important;
+  background: #111827 !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45) !important;
+}
+
+/* Ensure inline SVG icons use current text color in dark mode */
+[data-theme="dark"] .layout-root .theme-toggle svg,
+[data-theme="dark"] .layout-root .theme-toggle svg path,
+[data-theme="dark"] .layout-root .theme-toggle svg circle{
+  stroke: currentColor;
+  fill: none;
+}
+
+/* optional — if you need icons to be filled in dark mode */
+[data-theme="dark"] .layout-root .theme-toggle svg[fill-white]{
+  fill: currentColor;
+  stroke: none;
+}
