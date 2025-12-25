@@ -134,8 +134,12 @@
                     </div>
                 </div>
                 <div style="margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px;">
-                    <label for="avatar" id="avatarBtn" style="background:#22c55e;color:#ffffff;padding:10px 18px;border-radius:10px;font-weight:700;cursor:pointer;display:inline-block;font-size:15px;box-shadow:0 6px 0 rgba(0,0,0,0.08);">Choose File</label>
+                    <div style="display:flex;flex-direction:row;align-items:center;gap:8px;">
+                        <label for="avatar" id="avatarBtn" style="background:#22c55e;color:#ffffff;padding:10px 18px;border-radius:10px;font-weight:700;cursor:pointer;display:inline-block;font-size:15px;box-shadow:0 6px 0 rgba(0,0,0,0.08);">Choose Photo</label>
+                        <button type="button" id="removeAvatarBtn" style="background:#ef4444;color:#ffffff;padding:10px 12px;border-radius:10px;font-weight:700;cursor:pointer;display:inline-block;font-size:15px;border:none;">Remove Photo</button>
+                    </div>
                     <input id="avatar" name="avatar" type="file" accept="image/*" style="position:absolute;left:-9999px;" />
+                    <input type="hidden" name="remove_avatar" id="remove_avatar" value="0" />
                     <div id="avatarFilename" style="font-size:13px;color:var(--muted,#6b7280);{{ $user->avatar ? 'display:block;' : 'display:none;' }}" data-initial-filename="{{ $user->avatar ? basename($user->avatar) : '' }}">{{ $user->avatar ? basename($user->avatar) : '' }}</div>
                 </div>
                 <div style="margin-top:10px;font-size:13px;color:var(--muted,#6b7280);">Supported files: JPG, PNG. Max 2MB.</div>
@@ -192,6 +196,9 @@
             reader.onload = function(ev){ img.src = ev.target.result; hideIcon(); };
             reader.readAsDataURL(file);
 
+            // reset remove flag when user picks a file
+            try { document.getElementById('remove_avatar').value = '0'; } catch(e){}
+
             // try to set the file into the hidden input for form submit
             try {
                 const dt = new DataTransfer();
@@ -211,6 +218,22 @@
         // make label trigger file dialog for accessibility (label[for] already binds, but ensure keyboard support)
         if (avatarBtn) {
             avatarBtn.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+        }
+
+        const removeAvatarBtn = document.getElementById('removeAvatarBtn');
+        if (removeAvatarBtn) {
+            removeAvatarBtn.addEventListener('click', function(e){
+                try {
+                    // mark for removal
+                    const rem = document.getElementById('remove_avatar'); if (rem) rem.value = '1';
+                    // clear file input and preview
+                    try { input.value = ''; } catch(e){}
+                    pendingAvatarFile = null;
+                    if (filenameEl) { filenameEl.textContent = ''; filenameEl.style.display = 'none'; }
+                    if (img) { img.src = ''; }
+                    showIcon();
+                } catch (err) { dbg('removeAvatar error', err); }
+            });
         }
 
         // Prevent default document-level drag/drop to avoid browser navigating/opening files (page flicker)
@@ -301,8 +324,9 @@
                             // If server redirected to another URL, follow it
                             if (resp.redirected && resp.url) { window.location = resp.url; return; }
 
-                            // On success (200) but no redirect provided, reload to reflect latest state (flash should be present)
-                            if (resp.ok) { window.location.reload(); return; }
+                            // On success (200) but no redirect provided, navigate to the users index
+                            // to ensure flash messages are shown reliably.
+                            if (resp.ok) { window.location = "{{ route('users.index') }}"; return; }
 
                             // Otherwise try to show any server-rendered notification HTML returned
                             try {

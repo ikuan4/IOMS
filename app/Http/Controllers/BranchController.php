@@ -17,7 +17,15 @@ class BranchController extends Controller
             $s = $request->search;
             $query->where('name', 'like', "%{$s}%");
         }
-        $branches = $query->orderBy('id', 'asc')->paginate(15)->withQueryString();
+
+        // Respect per-page selection from query, with a safe whitelist and default 10
+        $allowed = [5,10,15,20,30];
+        $perPage = (int) $request->query('per_page', 10);
+        if (!in_array($perPage, $allowed, true)) {
+            $perPage = 10;
+        }
+
+        $branches = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
         return view('branches.index', compact('branches'));
     }
 

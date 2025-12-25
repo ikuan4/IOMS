@@ -27,6 +27,29 @@
         <div class="card" style="margin-top:16px;">
             <div style="display:flex;flex-direction:column;gap:18px;max-width:540px;">
 
+                {{-- Branch selection for Developers; hidden input for others --}}
+                @php
+                    $currentUser = Auth::user();
+                    $isDeveloper = $currentUser && $currentUser->isSuperAdmin();
+                @endphp
+                @if($isDeveloper)
+                    <div>
+                        <label for="branch_id" style="font-size:15px;font-weight:600;">Branch</label><br>
+                        <select name="branch_id" id="branch_id" style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
+                            <option value="">-- Select Branch (optional) --</option>
+                            @foreach($branches as $b)
+                                <option value="{{ $b->id }}" {{ (old('branch_id', $role->branch_id) == $b->id) ? 'selected' : '' }}>{{ $b->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('branch_id')
+                            <div style="color:#dc2626;font-size:13px;">{{ $message }}</div>
+                        @enderror
+                        <p class="muted" style="font-size:13px;margin-top:6px;">Assign this role to a specific branch. If left empty, role applies globally.</p>
+                    </div>
+                @else
+                    <input type="hidden" name="branch_id" value="{{ Auth::user()->branch_id }}">
+                @endif
+
                 {{-- Role Name (required) --}}
                 <div>
                     <label for="name" style="font-size:15px;font-weight:600;">

@@ -188,9 +188,10 @@
     {{-- Search + Add Role --}}
     <div class="header-right" style="display:flex;gap:12px;align-items:flex-end; margin-top:16px;">
         {{-- Search Form --}}
-        <form method="GET" action="{{ route('roles.index') }}" style="display:flex;gap:12px;align-items:flex-end; flex-wrap:wrap;">
+        <form method="GET" action="{{ route('roles.index') }}" id="roleSearchForm" style="display:flex;gap:12px;align-items:flex-end; flex-wrap:wrap;">
             {{-- Preserve current status when searching --}}
             <input type="hidden" name="status" value="{{ request('status') ?? 'all' }}">
+            <input type="hidden" name="per_page" id="roleSearchPerPage" value="{{ request()->query('per_page', 10) }}">
 
             <input
                 type="text"
@@ -198,7 +199,7 @@
                 id="roleSearchInput"
                 value="{{ request('search') }}"
                 placeholder="Search by name, slug, or description..."
-                oninput="filterRolesRealtime()"
+                oninput="debouncedRoleSearch()"
                 style="
                     padding:14px 16px;
                     border-radius:10px;
@@ -241,6 +242,7 @@
             <thead>
             <tr style="text-align:left; border-bottom:1px solid #e5e7eb;">
                 <th style="padding:8px;">Role Name</th>
+                <th style="padding:8px;">Branch</th>
                 <th style="padding:8px;">Hierarchy</th>
                 <th style="padding:8px;">Status</th>
                 <th style="padding:8px;">Users</th>
@@ -282,6 +284,14 @@
                                 Deleted by: {{ $role->deletedBy?->name ?? 'Unknown' }}
                                 <span style="margin-left:8px;">{{ $role->deleted_at->format('M j, Y') }}</span>
                             </span>
+                        @endif
+                    </td>
+
+                    <td style="padding:8px;">
+                        @if($role->branch)
+                            <span style="background:#f1f5f9;color:#0f172a;padding:6px 10px;border-radius:6px;font-size:13px;font-weight:700;">{{ $role->branch->name }}</span>
+                        @else
+                            <span class="muted">—</span>
                         @endif
                     </td>
                     <td style="padding:8px;">
@@ -330,7 +340,7 @@
                             font-weight:600;
                             font-size:13px;
                         ">
-                            {{ $role->users->count() }}
+                            {{ $role->userCount() }}
                         </span>
                     </td>
                     <td style="padding:8px; text-align:right; white-space:nowrap;" onclick="event.stopPropagation();">
@@ -469,12 +479,86 @@
                 @endif
             @empty
                 <tr>
-                    <td colspan="5" style="padding:12px;">No roles found.</td>
+                    <td colspan="6" style="padding:12px;">No roles found.</td>
                 </tr>
             @endforelse
             </tbody>
         </table>
-    </div>
+        <div style="margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px; color:var(--muted,#6b7280); font-weight:600;">
+                Total Roles: {{ $roles->total() }}
+            </div>
+
+            <div style="flex:1; display:flex; justify-content:center;">
+                @php
+                    $current = $roles->currentPage();
+                    $last = $roles->lastPage();
+                    $start = max(1, $current - 2);
+                    $end = min($last, $start + 4);
+                    if ($end - $start < 4) { $start = max(1, $end - 4); }
+                    $baseParams = request()->except(['page']);
+                @endphp
+
+                <nav aria-label="Pagination" style="display:inline-flex;align-items:center;gap:6px;background:var(--card);padding:6px 10px;border-radius:8px;">
+                    {{-- First --}}
+                    @php $firstColor = $current > 1 ? '#2563eb' : '#000'; @endphp
+                    @if($current > 1)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => 1])) }}" aria-label="First page" style="padding:6px 10px;border-radius:6px;background:transparent;color:{{ $firstColor }};text-decoration:none;font-weight:800;font-size:14px;">&laquo;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:6px 10px;color:{{ $firstColor }};font-weight:800;font-size:14px;">&laquo;</span>
+                    @endif
+
+                    {{-- Prev --}}
+                    @php $prevColor = $current > 1 ? '#2563eb' : '#000'; @endphp
+                    @if($current > 1)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $current - 1])) }}" aria-label="Previous page" style="padding:8px 12px;border-radius:6px;background:transparent;color:{{ $prevColor }};text-decoration:none;font-weight:800;font-size:15px;">&lt;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:8px 12px;color:{{ $prevColor }};font-weight:800;font-size:15px;">&lt;</span>
+                    @endif
+
+                    {{-- Page numbers --}}
+                    @for($p = $start; $p <= $end; $p++)
+                        @if($p == $current)
+                            <span aria-current="page" style="padding:9px 14px;border-radius:8px;background:#f3f4f6;color:#374151;font-weight:800;border:1px solid #e5e7eb;font-size:15px;">{{ $p }}</span>
+                        @else
+                            <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $p])) }}" style="padding:8px 12px;border-radius:6px;background:transparent;color:var(--text);text-decoration:none;font-weight:800;font-size:14px;" onmouseover="this.style.border='1px solid #22c55e';this.style.background='rgba(34,197,94,0.06)';" onmouseout="this.style.border='none';this.style.background='transparent';">{{ $p }}</a>
+                        @endif
+                    @endfor
+
+                    {{-- Next --}}
+                    @php $nextColor = $current < $last ? '#2563eb' : '#000'; @endphp
+                    @if($current < $last)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $current + 1])) }}" aria-label="Next page" style="padding:8px 12px;border-radius:6px;background:transparent;color:{{ $nextColor }};text-decoration:none;font-weight:800;font-size:15px;">&gt;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:8px 12px;color:{{ $nextColor }};font-weight:800;font-size:15px;">&gt;</span>
+                    @endif
+
+                    {{-- Last --}}
+                    @php $lastColor = $current < $last ? '#2563eb' : '#000'; @endphp
+                    @if($current < $last)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $last])) }}" aria-label="Last page" style="padding:6px 10px;border-radius:6px;background:transparent;color:{{ $lastColor }};text-decoration:none;font-weight:800;font-size:14px;">&raquo;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:6px 10px;color:{{ $lastColor }};font-weight:800;font-size:14px;">&raquo;</span>
+                    @endif
+                </nav>
+            </div>
+
+            <div style="flex:1; min-width:180px; display:flex; justify-content:flex-end; align-items:center; gap:8px;">
+                @php $currentPerPage = (int) request()->query('per_page', $roles->perPage() ?? 10); @endphp
+                <form method="GET" action="{{ url()->current() }}" id="rolePerPageForm" style="display:flex;align-items:center;gap:8px;">
+                    @foreach(request()->except(['per_page','page']) as $k => $v)
+                        <input type="hidden" name="{{ $k }}" value="{{ $v }}" />
+                    @endforeach
+                    <label for="role_per_page" style="font-size:13px;color:var(--muted,#6b7280);">Show per Page:</label>
+                    <select name="per_page" id="role_per_page" onchange="document.getElementById('rolePerPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid #e5e7eb;background:var(--card);">
+                        @foreach([5,10,15,20,30] as $opt)
+                            <option value="{{ $opt }}" {{ $currentPerPage == $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                        @endforeach
+                    </select>
+                </form>
+            </div>
+        </div>
+
     {{-- Users by Role Section --}}
     <div class="card" style="margin-top:12px;">
         <div style="padding:16px 18px; border-bottom:1px solid #e5e7eb;">
@@ -492,52 +576,71 @@
     @include('partials.confirmation-modal')
 
     <script>
-        function filterRolesRealtime() {
-            const searchInput = document.getElementById('roleSearchInput');
-            const searchTerm = searchInput.value.toLowerCase().trim();
-            const rows = document.querySelectorAll('.role-table-row');
-
-            rows.forEach(row => {
-                const name = row.getAttribute('data-name') || '';
-                const slug = row.getAttribute('data-slug') || '';
-                const description = row.getAttribute('data-description') || '';
-
-                const matches = name.includes(searchTerm) ||
-                               slug.includes(searchTerm) ||
-                               description.includes(searchTerm);
-
-                row.style.display = (matches || searchTerm === '') ? '' : 'none';
-            });
+        // Debounced server-side search for roles
+        let __roleSearchTimer = null;
+        function debouncedRoleSearch() {
+            clearTimeout(__roleSearchTimer);
+            __roleSearchTimer = setTimeout(() => {
+                const perPageSelect = document.getElementById('role_per_page') || document.getElementById('per_page');
+                const searchPerPage = document.getElementById('roleSearchPerPage');
+                if (perPageSelect && searchPerPage) searchPerPage.value = perPageSelect.value;
+                const form = document.getElementById('roleSearchForm');
+                if (form) form.submit();
+            }, 350);
         }
 
         function selectRole(roleId) {
-            const usersContainer = document.getElementById('users-by-role-container');
+                const usersContainer = document.getElementById('users-by-role-container');
 
-            // Show loading state
-            usersContainer.innerHTML = `
-                <div style="padding:48px; text-align:center;">
-                    <div style="display:inline-block; width:32px; height:32px; border:3px solid #e5e7eb; border-top-color:#22c55e; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
-                    <p style="margin-top:16px; opacity:0.6;">Loading users...</p>
-                </div>
-            `;
-
-            // Fetch users by role
-            fetch(`{{ route('roles.index') }}?role_id=${roleId}`, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
+                // Visually mark selected role row
+                document.querySelectorAll('.role-table-row').forEach(r => r.classList.remove('role-selected'));
+                const selectedRow = document.querySelector('.role-table-row[data-role-id="' + roleId + '"]');
+                if (selectedRow) {
+                    selectedRow.classList.add('role-selected');
+                    try { selectedRow.scrollIntoView({behavior: 'smooth', block: 'center'}); } catch (e) {}
                 }
-            })
-            .then(response => response.json())
-            .then(users => {
-                if (users.length === 0) {
-                    usersContainer.innerHTML = `
-                        <div style="padding:48px; text-align:center; opacity:0.6;">
-                            <span data-feather="users" style="width:48px; height:48px; margin-bottom:16px;"></span>
-                            <p>No users assigned to this role</p>
-                        </div>
-                    `;
-                    feather.replace();
-                } else {
+
+                // Update URL query param without reloading
+                try {
+                    const newUrl = new URL(window.location.href);
+                    newUrl.searchParams.set('role_id', roleId);
+                    history.replaceState({}, '', newUrl.toString());
+                } catch (e) {}
+
+                // Show loading state
+                usersContainer.innerHTML = `
+                    <div style="padding:48px; text-align:center;">
+                        <div style="display:inline-block; width:32px; height:32px; border:3px solid #e5e7eb; border-top-color:#22c55e; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+                        <p style="margin-top:16px; opacity:0.6;">Loading users...</p>
+                    </div>
+                `;
+
+                // Fetch users by role (cache-busted) and be resilient to response content-type
+                fetch(`{{ route('roles.index') }}?role_id=${roleId}&_=${Date.now()}`, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => {
+                    if (response.status === 403 || response.status === 401) {
+                        throw new Error('unauthorized');
+                    }
+                    const ct = (response.headers.get('content-type') || '').toLowerCase();
+                    if (ct.includes('application/json')) return response.json();
+                    return response.text().then(txt => {
+                        try { return JSON.parse(txt); } catch (e) { throw new Error('invalid-json'); }
+                    });
+                })
+                .then(users => {
+                    if (!users || users.length === 0) {
+                        usersContainer.innerHTML = `
+                            <div style="padding:48px; text-align:center; opacity:0.6;">
+                                <span data-feather="users" style="width:48px; height:48px; margin-bottom:16px;"></span>
+                                <p>No users assigned to this role</p>
+                            </div>
+                        `;
+                        if (window.feather) feather.replace();
+                        return;
+                    }
+
                     let tableHtml = `
                         <div style="overflow-x:auto;">
                             <table style="width:100%; border-collapse:collapse;">
@@ -557,7 +660,7 @@
                             ? '<span style="color:#16a34a;font-weight:600;">Active</span>'
                             : '<span style="color:#dc2626;font-weight:600;">Inactive</span>';
 
-                        const roles = user.custom_roles
+                        const roles = user.custom_roles && user.custom_roles.length > 0
                             ? user.custom_roles.map(r => `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;margin-right:4px;">${r.name}</span>`).join('')
                             : '<span style="opacity:0.5;">None</span>';
 
@@ -578,24 +681,39 @@
                     `;
 
                     usersContainer.innerHTML = tableHtml;
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching users:', error);
-                usersContainer.innerHTML = `
-                    <div style="padding:48px; text-align:center; color:#dc2626;">
-                        <span data-feather="alert-triangle" style="width:48px; height:48px; margin-bottom:16px;"></span>
-                        <p>Error loading users. Please try again.</p>
-                    </div>
-                `;
-                feather.replace();
-            });
+                    if (window.feather) feather.replace();
+                })
+                .catch(err => {
+                    console.error('Error fetching users:', err);
+                    if (err.message === 'unauthorized') {
+                        usersContainer.innerHTML = `
+                            <div style="padding:48px; text-align:center; color:#dc2626;">
+                                <span data-feather="lock" style="width:48px; height:48px; margin-bottom:16px;"></span>
+                                <p>You do not have permission to view users for this role.</p>
+                            </div>
+                        `;
+                    } else {
+                        usersContainer.innerHTML = `
+                            <div style="padding:48px; text-align:center; color:#dc2626;">
+                                <span data-feather="alert-triangle" style="width:48px; height:48px; margin-bottom:16px;"></span>
+                                <p>Error loading users. Please try again.</p>
+                            </div>
+                        `;
+                    }
+                    if (window.feather) feather.replace();
+                });
         }
     </script>
 
     <style>
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+
+        .role-selected {
+            background: #f0fdf4 !important;
+            transition: box-shadow 0.15s ease-in-out;
+            box-shadow: 0 2px 6px rgba(34,197,94,0.08);
         }
 
         /* Mobile responsiveness */

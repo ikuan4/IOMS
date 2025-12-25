@@ -91,9 +91,10 @@
     </script>
 
     <div class="header-right" style="display:flex;gap:12px;align-items:flex-end; margin-top:16px;">
-        <form method="GET" action="{{ route('users.index') }}" style="display:flex;gap:12px;align-items:flex-end; flex-wrap:wrap;">
+        <form method="GET" action="{{ route('users.index') }}" id="searchForm" style="display:flex;gap:12px;align-items:flex-end; flex-wrap:wrap;">
             <input type="hidden" name="status" value="{{ $status ?? 'all' }}">
-            <input type="text" name="search" id="userSearchInput" value="{{ $search }}" placeholder="Search by name, mobile, or email..." oninput="filterUsersRealtime()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
+            <input type="hidden" name="per_page" id="searchPerPage" value="{{ request()->query('per_page', 10) }}">
+            <input type="text" name="search" id="userSearchInput" value="{{ $search }}" placeholder="Search by name, mobile, or email..." oninput="debouncedSearch()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
         </form>
 
         @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('create', \App\Models\User::class))
@@ -169,23 +170,99 @@
             @endforelse
             </tbody>
         </table>
-        <div style="margin-top:12px;">{{ $users->links() }}</div>
+        <div style="margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px; color:var(--muted,#6b7280); font-weight:600;">
+                Total Users: {{ $users->total() }}
+            </div>
+
+            <div style="flex:1; display:flex; justify-content:center;">
+                @php
+                    $current = $users->currentPage();
+                    $last = $users->lastPage();
+                    $start = max(1, $current - 2);
+                    $end = min($last, $start + 4);
+                    if ($end - $start < 4) { $start = max(1, $end - 4); }
+                    $baseParams = request()->except(['page']);
+                @endphp
+
+                <nav aria-label="Pagination" style="display:inline-flex;align-items:center;gap:6px;background:var(--card);padding:6px 10px;border-radius:8px;">
+                    {{-- First --}}
+                    @php $firstColor = $current > 1 ? '#2563eb' : '#000'; @endphp
+                    @if($current > 1)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => 1])) }}" aria-label="First page" style="padding:6px 10px;border-radius:6px;background:transparent;color:{{ $firstColor }};text-decoration:none;font-weight:800;font-size:14px;">&laquo;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:6px 10px;color:{{ $firstColor }};font-weight:800;font-size:14px;">&laquo;</span>
+                    @endif
+
+                    {{-- Prev --}}
+                    @php $prevColor = $current > 1 ? '#2563eb' : '#000'; @endphp
+                    @if($current > 1)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $current - 1])) }}" aria-label="Previous page" style="padding:8px 12px;border-radius:6px;background:transparent;color:{{ $prevColor }};text-decoration:none;font-weight:800;font-size:15px;">&lt;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:8px 12px;color:{{ $prevColor }};font-weight:800;font-size:15px;">&lt;</span>
+                    @endif
+
+                    {{-- Page numbers --}}
+                    @for($p = $start; $p <= $end; $p++)
+                        @if($p == $current)
+                            <span aria-current="page" style="padding:9px 14px;border-radius:8px;background:#f3f4f6;color:#374151;font-weight:800;border:1px solid #e5e7eb;font-size:15px;">{{ $p }}</span>
+                        @else
+                            <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $p])) }}" style="padding:8px 12px;border-radius:6px;background:transparent;color:var(--text);text-decoration:none;font-weight:800;font-size:14px;" onmouseover="this.style.border='1px solid #22c55e';this.style.background='rgba(34,197,94,0.06)';" onmouseout="this.style.border='none';this.style.background='transparent';">{{ $p }}</a>
+                        @endif
+                    @endfor
+
+                    {{-- Next --}}
+                    @php $nextColor = $current < $last ? '#2563eb' : '#000'; @endphp
+                    @if($current < $last)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $current + 1])) }}" aria-label="Next page" style="padding:8px 12px;border-radius:6px;background:transparent;color:{{ $nextColor }};text-decoration:none;font-weight:800;font-size:15px;">&gt;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:8px 12px;color:{{ $nextColor }};font-weight:800;font-size:15px;">&gt;</span>
+                    @endif
+
+                    {{-- Last --}}
+                    @php $lastColor = $current < $last ? '#2563eb' : '#000'; @endphp
+                    @if($current < $last)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $last])) }}" aria-label="Last page" style="padding:6px 10px;border-radius:6px;background:transparent;color:{{ $lastColor }};text-decoration:none;font-weight:800;font-size:14px;">&raquo;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:6px 10px;color:{{ $lastColor }};font-weight:800;font-size:14px;">&raquo;</span>
+                    @endif
+                </nav>
+            </div>
+
+            <div style="flex:1; min-width:180px; display:flex; justify-content:flex-end; align-items:center; gap:8px;">
+                @php
+                    $currentPerPage = (int) request()->query('per_page', $users->perPage() ?? 10);
+                @endphp
+                <form method="GET" action="{{ url()->current() }}" id="perPageForm" style="display:flex;align-items:center;gap:8px;">
+                    @foreach(request()->except(['per_page','page']) as $k => $v)
+                        <input type="hidden" name="{{ $k }}" value="{{ $v }}" />
+                    @endforeach
+                    <label for="per_page" style="font-size:13px;color:var(--muted,#6b7280);">Show per Page:</label>
+                    <select name="per_page" id="per_page" onchange="document.getElementById('perPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid #e5e7eb;background:var(--card);">
+                        @foreach([5,10,15,20,30] as $opt)
+                            <option value="{{ $opt }}" {{ $currentPerPage == $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                        @endforeach
+                    </select>
+                </form>
+            </div>
+        </div>
     </div>
 
     @include('partials.confirmation-modal')
 
     <script>
-        function filterUsersRealtime() {
-            const searchInput = document.getElementById('userSearchInput');
-            const searchTerm = searchInput.value.toLowerCase().trim();
-            const rows = document.querySelectorAll('.user-table-row');
-            rows.forEach(row => {
-                const name = row.getAttribute('data-name') || '';
-                const mobile = row.getAttribute('data-mobile') || '';
-                const email = row.getAttribute('data-email') || '';
-                const matches = name.includes(searchTerm) || mobile.includes(searchTerm) || email.includes(searchTerm);
-                row.style.display = (matches || searchTerm === '') ? '' : 'none';
-            });
+        // Debounced server-side search so it searches all users (not just current page)
+        let __userSearchTimer = null;
+        function debouncedSearch() {
+            clearTimeout(__userSearchTimer);
+            __userSearchTimer = setTimeout(() => {
+                // ensure per_page selection is preserved when searching
+                const perPageSelect = document.getElementById('per_page');
+                const searchPerPage = document.getElementById('searchPerPage');
+                if (perPageSelect && searchPerPage) searchPerPage.value = perPageSelect.value;
+                const form = document.getElementById('searchForm');
+                if (form) form.submit();
+            }, 350);
         }
     </script>
 @endsection

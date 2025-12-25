@@ -94,7 +94,13 @@ class User extends Authenticatable
      */
     public function isSuperAdmin(): bool
     {
-        return $this->id === config('roles.protected_user_id', 1);
+        // Super Admin / Admin concepts removed. Treat Developer role as elevated user.
+        try {
+            $roleName = strtolower(trim($this->role->name ?? ''));
+            return $roleName === 'developer';
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**
@@ -160,52 +166,36 @@ class User extends Authenticatable
      */
     public function getManageableRoles()
     {
+        // Developer sees all active roles
         if ($this->isSuperAdmin()) {
-            $roles = Role::where('id', '!=', config('roles.super_admin_id', 1))
-                ->where('is_active', true)
+            $roles = Role::where('is_active', true)
                 ->whereNull('deleted_at')
+                ->orderBy('priority', 'asc')
                 ->get();
-        } else {
-            if (!$this->role) {
-                return collect([]);
-            }
-
-            $descendantIds = $this->role->getAllDescendantIdsOptimized();
-            $descendantIds = $descendantIds->reject(fn($id) => $id === $this->role_id);
-
-            // Exclude Super Admin role for non-super-admin users
-            $superAdminId = config('roles.super_admin_id', 1);
-            $roles = Role::whereIn('id', $descendantIds)
-                ->where('id', '!=', $superAdminId)
-                ->where('is_active', true)
-                ->whereNull('deleted_at')
-                ->get();
+            return $roles;
         }
+
+        // Non-developers: return roles within the same branch or the user's own role
+        if (!$this->role) {
+            return collect([]);
+        }
+
+        $roles = Role::where(function ($q) {
+            $q->where('branch_id', $this->branch_id)
+              ->orWhere('id', $this->role_id);
+        })->where('is_active', true)
+          ->whereNull('deleted_at')
+          ->orderBy('priority', 'asc')
+          ->get();
 
         // Remove Developer role for non-developer users
         $roles = $roles->reject(function ($r) {
             $isDeveloperRole = strtolower(trim($r->name ?? '')) === 'developer';
             $currentIsDeveloper = strtolower(trim($this->role->name ?? '')) === 'developer';
             return $isDeveloperRole && !$currentIsDeveloper;
-        });
+        })->values();
 
-        // If current user is Developer ensure their Developer role appears
-        if (strtolower(trim($this->role->name ?? '')) === 'developer') {
-            $developerRole = Role::whereRaw('lower(name) = ?', ['developer'])->first();
-            if ($developerRole && !$roles->contains('id', $developerRole->id)) {
-                $roles->push($developerRole);
-            }
-        }
-
-        // Sort by hierarchy level (root first), then alphabetically
-        return $roles->sortBy([
-            function ($role) {
-                return $role->getAllAncestorIds()->count();
-            },
-            function ($role) {
-                return strtolower($role->name);
-            }
-        ])->values();
+        return $roles;
     }
 
     /**
@@ -225,9 +215,9 @@ class User extends Authenticatable
             return User::withTrashed()->where('id', '!=', $this->id)->with('role')->get();
         }
 
-        $manageableRoleIds = $this->getManageableRoles()->pluck('id');
-
-        return User::withTrashed()->whereIn('role_id', $manageableRoleIds)
+        // Non-developers: return users in the same branch
+        return User::withTrashed()
+            ->where('branch_id', $this->branch_id)
             ->where('id', '!=', $this->id)
             ->with('role')
             ->get();

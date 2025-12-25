@@ -7,34 +7,11 @@ use Spatie\Permission\Models\Role as SpatieRole;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use App\Traits\HasAuditFields;
-
-/**
- * @property int $id
- * @property string $name
- * @property string $slug
- * @property string|null $description
- * @property bool $is_active
- * @property string $guard_name
- * @property int|null $created_by
- * @property int|null $updated_by
- * @property int|null $deleted_by
- * @property int|null $restored_by
- * @property \Carbon\Carbon|null $created_at
- * @property \Carbon\Carbon|null $updated_at
- * @property \Carbon\Carbon|null $deleted_at
- * @property-read \Illuminate\Database\Eloquent\Collection $permissions
- * @property-read \Illuminate\Database\Eloquent\Collection $users
- * @property-read \Illuminate\Database\Eloquent\Collection $parents
- * @property-read \Illuminate\Database\Eloquent\Collection $children
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Spatie\Permission\Models\Role as SpatieRole;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\DB;
-use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\Branch;
 
 /**
- * Role model with hierarchy helpers and audit fields.
+ * Role model (hierarchy removed) with audit fields.
  */
 class Role extends SpatieRole
 {
@@ -54,36 +31,32 @@ class Role extends SpatieRole
     /**
      * Roles that are parents of this role (hierarchy pivot where this is child).
      */
-    public function parents(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
-    {
-        return $this->belongsToMany(Role::class, 'role_hierarchies', 'child_role_id', 'parent_role_id')
-            ->select('roles.id', 'roles.name', 'roles.slug', 'roles.description', 'roles.is_active', 'roles.created_at', 'roles.updated_at')
-            ->withTimestamps();
-    }
-
-    /**
-     * Get child roles (many-to-many hierarchical).
-     */
-    public function children(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
-    {
-        return $this->belongsToMany(Role::class, 'role_hierarchies', 'parent_role_id', 'child_role_id')
-            ->select('roles.id', 'roles.name', 'roles.slug', 'roles.description', 'roles.is_active', 'roles.created_at', 'roles.updated_at')
-            ->withTimestamps();
-    }
+    // Hierarchy functionality removed. Roles are now scoped by `branch_id` and `priority` only.
 
     public function isSuperAdmin(): bool
     {
-        return strtolower($this->name) === 'super-admin' || strtolower($this->name) === 'super admin';
+        try {
+            $name = strtolower(trim($this->name ?? ''));
+            return $name === 'developer' || ($this->slug ?? '') === 'developer';
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     public function isAdmin(): bool
     {
-        return strtolower($this->name) === 'admin';
+        try {
+            $name = strtolower(trim($this->name ?? ''));
+            return in_array($name, ['admin', 'administrator']);
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     public function isProtected(): bool
     {
-        return $this->isSuperAdmin() || $this->isAdmin();
+        // Protected means it is the Developer or Super Admin equivalent
+        return $this->isSuperAdmin();
     }
 
     public function users(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
@@ -92,129 +65,33 @@ class Role extends SpatieRole
             ->withTimestamps();
     }
 
-    public function allDescendants()
+    /**
+     * Count users assigned to this role.
+     * Handles both pivot-based assignments (model_has_roles) and direct role_id on users table.
+     */
+    public function userCount(): int
     {
-        return $this->children()->with('allDescendants');
-    }
-
-    public function allAncestors()
-    {
-        return $this->parents()->with('allAncestors');
-    }
-
-    public function getAllDescendantIds($allRoles = null)
-    {
-        $ids = collect([$this->id]);
-
-        if ($allRoles !== null) {
-            $childrenIds = DB::table('role_hierarchies')
-                ->where('parent_role_id', $this->id)
-                ->pluck('child_role_id');
-
-            foreach ($childrenIds as $childId) {
-                $child = $allRoles->firstWhere('id', $childId);
-                if ($child) {
-                    $ids = $ids->merge($child->getAllDescendantIds($allRoles));
-                }
-            }
+        // Get IDs assigned via pivot relation (if loaded, use it to avoid N+1)
+        if ($this->relationLoaded('users')) {
+            $pivotIds = $this->users->pluck('id')->toArray();
         } else {
-            foreach ($this->children as $child) {
-                $ids = $ids->merge($child->getAllDescendantIds());
-            }
+            $pivotIds = $this->users()->pluck('id')->toArray();
         }
 
-        return $ids->unique();
+        // Get IDs assigned via users.role_id foreign key
+        $directIds = \App\Models\User::where('role_id', $this->id)->pluck('id')->toArray();
+
+        return count(array_unique(array_merge($pivotIds, $directIds)));
     }
 
-    public function getAllDescendantIdsOptimized()
+    /**
+     * Branch this role belongs to (optional)
+     */
+    public function branch()
     {
-        $allRoles = self::all()->keyBy('id');
-        return $this->getAllDescendantIds($allRoles);
+        return $this->belongsTo(Branch::class, 'branch_id');
     }
-
-    public function getAllAncestorIds($allRoles = null)
-    {
-        $ids = collect([]);
-
-        if ($allRoles !== null) {
-            $parentIds = DB::table('role_hierarchies')
-                ->where('child_role_id', $this->id)
-                ->pluck('parent_role_id');
-
-            foreach ($parentIds as $parentId) {
-                $parent = $allRoles->firstWhere('id', $parentId);
-                if ($parent) {
-                    $ids->push($parent->id);
-                    $ids = $ids->merge($parent->getAllAncestorIds($allRoles));
-                }
-            }
-        } else {
-            foreach ($this->parents as $parent) {
-                $ids->push($parent->id);
-                $ids = $ids->merge($parent->getAllAncestorIds());
-            }
-        }
-
-        return $ids->unique();
-    }
-
-    public function getAllAncestorIdsOptimized()
-    {
-        $allRoles = self::all()->keyBy('id');
-        return $this->getAllAncestorIds($allRoles);
-    }
-
-    public function isAncestorOf(Role $role): bool
-    {
-        return $this->getAllDescendantIds()->contains($role->id);
-    }
-
-    public function isDescendantOf(Role $role): bool
-    {
-        return $this->getAllAncestorIds()->contains($role->id);
-    }
-
-    public function attachParent(Role $parent)
-    {
-        if ($this->id === $parent->id || $this->isAncestorOf($parent)) {
-            throw new \Exception('Cannot create circular hierarchy.');
-        }
-
-        $this->parents()->syncWithoutDetaching([$parent->id]);
-        return $this;
-    }
-
-    public function attachChild(Role $child)
-    {
-        if ($this->id === $child->id || $this->isDescendantOf($child)) {
-            throw new \Exception('Cannot create circular hierarchy.');
-        }
-
-        $this->children()->syncWithoutDetaching([$child->id]);
-        return $this;
-    }
-
-    public function detachParent(Role $parent)
-    {
-        $this->parents()->detach($parent->id);
-        return $this;
-    }
-
-    public function detachChild(Role $child)
-    {
-        $this->children()->detach($child->id);
-        return $this;
-    }
-
-    public function parent()
-    {
-        return $this->parents()->first();
-    }
-
-    public function allChildren()
-    {
-        return $this->allDescendants();
-    }
+    // Hierarchy helper methods removed.
 
     public function scopeActive($query)
     {

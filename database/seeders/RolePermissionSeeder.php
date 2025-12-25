@@ -26,7 +26,6 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'Create New Role', 'slug' => 'roles.create', 'group' => 'roles', 'guard_name' => 'web'],
             ['name' => 'Edit Role Details', 'slug' => 'roles.edit', 'group' => 'roles', 'guard_name' => 'web'],
             ['name' => 'Delete Roles', 'slug' => 'roles.delete', 'group' => 'roles', 'guard_name' => 'web'],
-            ['name' => 'Manage Role Hierarchy', 'slug' => 'roles.manage-priority', 'group' => 'roles', 'guard_name' => 'web'],
 
             ['name' => 'View Permissions', 'slug' => 'permissions.view', 'group' => 'permissions', 'guard_name' => 'web'],
             ['name' => 'Create New Permission', 'slug' => 'permissions.create', 'group' => 'permissions', 'guard_name' => 'web'],
@@ -75,6 +74,9 @@ class RolePermissionSeeder extends Seeder
         }
         if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'is_active')) {
             $roleData['is_active'] = true;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'guard_name')) {
+            $roleData['guard_name'] = 'web';
         }
 
         \Illuminate\Support\Facades\DB::table('roles')->updateOrInsert(

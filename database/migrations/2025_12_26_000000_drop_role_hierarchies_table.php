@@ -1,7 +1,6 @@
 <?php
 
-// Migration consolidated: previously moved parent_id into role_hierarchies.
-// Now a no-op to preserve migration ordering; consolidated schema handles final state.
+// No-op: role_hierarchies handled by consolidated migration / removed from schema.
 
 use Illuminate\Database\Migrations\Migration;
 

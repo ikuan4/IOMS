@@ -68,7 +68,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/roles/{id}/restore', [RoleController::class, 'restore'])
         ->name('roles.restore');
 
-    // Role hierarchy (manage priority)
+    // Role hierarchy routes (allow manage-priority view and update)
     Route::get('/roles/{role}/hierarchy', [RoleController::class, 'managePriority'])
         ->name('roles.hierarchy');
     Route::post('/roles/hierarchy/update', [RoleController::class, 'updatePriority'])

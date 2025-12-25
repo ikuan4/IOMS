@@ -1,72 +1,69 @@
+"""PATCH_REPLACE_START"""
 @extends('layouts.dashboard')
 
-@section('title', 'Role Hierarchy')
+@section('title', 'Roles by Branch')
 
 @section('content')
     <div class="header-card">
         <div class="header-left">
-            <h2>Role Hierarchy</h2>
-            <p class="muted">Visualize and adjust the organizational role hierarchy.</p>
+            <h2>Roles by Branch</h2>
+            <p class="muted">Select a branch to view roles and their priority.</p>
         </div>
     </div>
 
-    <div class="card" style="margin-top:12px;padding:0;">
-        <div style="padding:16px 18px; border-bottom:1px solid rgba(0,0,0,0.06);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-            <div>
-                <h5 style="margin:0; font-size:16px; font-weight:600;">Organizational Hierarchy</h5>
-                <p style="margin:4px 0 0 0; font-size:13px; opacity:0.7;">Visual representation of role relationships</p>
-            </div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px;">
+        <div class="card" style="padding:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                <div>
+                    <h5 style="margin:0;font-size:16px;font-weight:600;">Branch</h5>
+                    <p class="muted" style="margin:4px 0 0 0;">Choose branch to filter roles.</p>
+                </div>
 
-            <div style="display:flex;gap:8px;align-items:center;">
-                <span style="font-size:12px;color:#6b7280;font-weight:500;">Zoom:</span>
-                <button type="button" onclick="zoomOrganogram('out')" class="btn">Out</button>
-                <span id="zoom-level" style="font-size:13px;color:#6b7280;min-width:45px;text-align:center;">100%</span>
-                <button type="button" onclick="zoomOrganogram('in')" class="btn">In</button>
-                <button type="button" onclick="resetZoom()" class="btn">Fit</button>
-            </div>
-        </div>
-
-        <div style="padding:18px;overflow-x:auto;">
-            <div id="dynamic-legend" style="display:flex;justify-content:center;gap:20px;margin-bottom:18px;flex-wrap:wrap;"></div>
-
-            <div id="organogram" style="display:flex;flex-direction:column;align-items:center;gap:20px;transform:scale(1);transform-origin:center top;transition:transform 0.3s ease;">
-                {{-- Existing nested hierarchy will still render for form interactions; organogram is a visual overlay of that structure. --}}
-                <div id="hierarchy-root" class="organogram-root" style="width:100%;">
-                    @if($roles->count())
-                        <div id="sortable-roles">
-                            @foreach($roles as $role)
-                                @if(!$role->parent_id)
-                                    @include('roles._hierarchy-item', ['role' => $role])
-                                @endif
-                            @endforeach
-                        </div>
+                <div style="min-width:240px;">
+                    @if($isDeveloper ?? false)
+                        <form method="GET" action="{{ route('roles.hierarchy', $role->id ?? 0) }}">
+                            <select name="branch_id" onchange="this.form.submit()" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #d0d7e0;font-size:14px;">
+                                <option value="">-- Select Branch --</option>
+                                @foreach($branches as $b)
+                                    <option value="{{ $b->id }}" {{ (int)($selectedBranchId ?? 0) === $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                                @endforeach
+                            </select>
+                        </form>
                     @else
-                        <p>No roles defined.</p>
+                        <div style="padding:10px 12px;border-radius:8px;border:1px solid #e6edf3;background:#f8fafc;font-size:14px;">{{ optional(\App\Models\Branch::find($selectedBranchId))->name ?? 'My Branch' }}</div>
                     @endif
                 </div>
             </div>
         </div>
+
+        <div class="card" style="padding:16px;">
+            <h5 style="margin:0 0 10px 0;font-size:16px;font-weight:600;">Roles</h5>
+            @if($rolesForView && $rolesForView->count())
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead>
+                        <tr style="text-align:left;border-bottom:1px solid #e5e7eb;">
+                            <th style="padding:10px;">Role</th>
+                            <th style="padding:10px;">Description</th>
+                            <th style="padding:10px;width:120px;">Priority</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($rolesForView as $r)
+                            <tr style="border-bottom:1px solid #f3f4f6;">
+                                <td style="padding:10px;font-weight:700;">{{ $r->name }}</td>
+                                <td style="padding:10px;color:#6b7280;font-size:13px;">{{ $r->description ?? '—' }}</td>
+                                <td style="padding:10px;">
+                                    <span style="display:inline-block;background:#eef2ff;color:#1e40af;padding:6px 10px;border-radius:8px;font-weight:700;">{{ $r->priority ?? 100 }}</span>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @else
+                <p class="muted">No roles available for the selected branch or you are not part of any roles.</p>
+            @endif
+        </div>
     </div>
 
 @endsection
-
-@push('styles')
-<style>
-.organogram { display:flex; flex-direction:column; gap:12px; }
-.organogram .node { border:1px solid #e5e7eb; padding:12px; border-radius:8px; background:var(--card); }
-.organogram .children { margin-left:20px; margin-top:8px; }
-</style>
-@endpush
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function(){
-    document.getElementById('expand-all').addEventListener('click', function(e){
-        document.querySelectorAll('.children').forEach(c=> c.style.display='block');
-    });
-    document.getElementById('collapse-all').addEventListener('click', function(e){
-        document.querySelectorAll('.children').forEach(c=> c.style.display='none');
-    });
-});
-</script>
-@endpush
+"""PATCH_REPLACE_END"""

@@ -15,8 +15,9 @@
         @php
             $isRoleModule = request()->routeIs('roles.*');
             $isUserModule = request()->routeIs('users.*');
+            $isBranchModule = request()->routeIs('branches.*');
+            $isUserMgmtModule = $isRoleModule || $isUserModule || $isBranchModule;
             $isHierarchyPage = request()->routeIs('roles.hierarchy') || request()->routeIs('roles.hierarchy.*');
-            $isUserMgmtModule = $isRoleModule || $isUserModule;
         @endphp
 
         {{-- User Management module (collapsible group) --}}
@@ -41,8 +42,13 @@
                 </a>
                 @endcan
                 @if(auth()->user()->can('viewAny', \App\Models\Role::class))
-                <a href="{{ route('roles.index') }}" class="{{ ($isRoleModule && !$isHierarchyPage) ? 'active' : '' }}">
+                <a href="{{ route('roles.index') }}" class="{{ ($isRoleModule && !($isHierarchyPage ?? false)) ? 'active' : '' }}">
                     <span class="label">Manage Roles</span>
+                </a>
+                @endif
+                @if((auth()->user()->isSuperAdmin() ) || (auth()->user()->hasPermission('roles.manage-priority') && \Illuminate\Support\Facades\Route::has('roles.hierarchy')))
+                <a href="{{ route('roles.hierarchy', request()->route('role') ?? \App\Models\Role::first()->id ?? 1) }}" class="{{ ($isHierarchyPage ?? false) ? 'active' : '' }}">
+                    <span class="label">Role Hierarchy</span>
                 </a>
                 @endif
                 @can('viewAny', \App\Models\Branch::class)
@@ -50,14 +56,7 @@
                     <span class="label">Manage Branches</span>
                 </a>
                 @endcan
-                @if(Route::has('roles.hierarchy') && auth()->user()->can('viewAny', \App\Models\Role::class))
-                    @php
-                        $roleId = request()->route('role') ?? (\App\Models\Role::first() ? \App\Models\Role::first()->id : 1);
-                    @endphp
-                    <a href="{{ route('roles.hierarchy', $roleId) }}" class="{{ $isHierarchyPage ? 'active' : '' }}">
-                        <span class="label">Manage Hierarchy</span>
-                    </a>
-                @endif
+                {{-- Legacy hierarchy link removed --}}
             </div>
         </div>
         @endauth

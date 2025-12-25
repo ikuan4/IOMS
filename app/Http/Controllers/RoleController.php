@@ -6,6 +6,7 @@ use App\Models\Role;
 use App\Models\Permission;
 use App\Models\User;
 use App\Models\AuditLog;
+use App\Models\Branch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
@@ -23,10 +24,10 @@ class RoleController extends Controller
         /** @var User $currentUser */
         $currentUser = Auth::user();
 
-        $query = Role::with(['users', 'parents', 'deletedBy']);
-
-        if ($currentUser->isSuperAdmin() || $currentUser->role?->slug === 'admin') {
-            $query->withTrashed();
+        // Build base query (without status/search) for counts and scoping
+        $baseQuery = Role::with(['users', 'deletedBy', 'branch']);
+        if ($currentUser->isSuperAdmin()) {
+            $baseQuery->withTrashed();
         } else {
             $manageableRoleIds = $currentUser->getManageableRoles()->pluck('id')->push($currentUser->role_id);
 
@@ -35,13 +36,24 @@ class RoleController extends Controller
                 ->where('auditable_type', Role::class)
                 ->pluck('auditable_id');
 
-            $query->where(function ($q) use ($manageableRoleIds, $userDeletedRoleIds) {
+            $baseQuery->where(function ($q) use ($manageableRoleIds, $userDeletedRoleIds) {
                 $q->whereIn('id', $manageableRoleIds)
                     ->orWhere(function ($subQ) use ($userDeletedRoleIds) {
                         $subQ->whereIn('id', $userDeletedRoleIds)->onlyTrashed();
                     });
             });
         }
+
+        // compute counts for status cards
+        $statusCounts = [
+            'all' => (clone $baseQuery)->count(),
+            'active' => (clone $baseQuery)->whereNull('deleted_at')->where('is_active', true)->count(),
+            'inactive' => (clone $baseQuery)->whereNull('deleted_at')->where('is_active', false)->count(),
+            'deleted' => (clone $baseQuery)->onlyTrashed()->count(),
+        ];
+
+        // Now apply filters (status/search) to a fresh query cloned from base
+        $query = (clone $baseQuery);
 
         if ($request->has('status')) {
             if ($request->status === 'active') {
@@ -62,20 +74,46 @@ class RoleController extends Controller
             });
         }
 
-        $roles = $query->orderBy('id', 'asc')->get();
-
-        // Get users by role if requested
-        $usersByRole = [];
-        if ($request->has('role_id') && $request->ajax()) {
-            $role = Role::find($request->role_id);
-            if ($role) {
-                $this->authorize('view', $role);
-                $usersByRole = $role->users()->with('role')->get();
-            }
-            return response()->json($usersByRole);
+        // Respect per-page selection from query, with a safe whitelist and default 10
+        $allowed = [5,10,15,20,30];
+        $perPage = (int) $request->query('per_page', 10);
+        if (!in_array($perPage, $allowed, true)) {
+            $perPage = 10;
         }
 
-        return view('roles.index', compact('roles'));
+        $roles = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
+
+        // Get users by role if requested (AJAX) — return normalized JSON shape
+        if ($request->has('role_id') && $request->ajax()) {
+            $role = Role::find($request->role_id);
+            $mapped = [];
+            if ($role) {
+                $this->authorize('view', $role);
+
+                // Users assigned via pivot (model_has_roles)
+                $pivotUsers = $role->users()->with('role')->get();
+
+                // Users assigned via direct foreign key on users.role_id
+                $directUsers = User::where('role_id', $role->id)->with('role')->get();
+
+                // Merge and deduplicate by id
+                $users = $pivotUsers->concat($directUsers)->unique('id')->values();
+
+                $mapped = $users->map(function ($u) {
+                    $roleObj = $u->role ? ['id' => $u->role->id, 'name' => $u->role->name, 'slug' => $u->role->slug] : null;
+                    return [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'email' => $u->email,
+                        'active' => (bool) ($u->active ?? $u->is_active ?? false),
+                        'custom_roles' => $roleObj ? [$roleObj] : [],
+                    ];
+                })->values();
+            }
+            return response()->json($mapped);
+        }
+
+        return view('roles.index', compact('roles', 'statusCounts'));
     }
 
     public function store(Request $request)
@@ -114,7 +152,7 @@ class RoleController extends Controller
     public function show(Role $role)
     {
         $this->authorize('view', $role);
-        $role->load('users', 'permissions', 'parent', 'children');
+        $role->load('users', 'permissions', 'branch');
         return view('roles.show', compact('role'));
     }
 
@@ -124,7 +162,8 @@ class RoleController extends Controller
         // Provide all permissions to the edit view so the checkboxes can render
         $permissions = Permission::orderBy('name')->get();
         $role->load('permissions');
-        return view('roles.edit', compact('role', 'permissions'));
+        $branches = Branch::orderBy('name')->get();
+        return view('roles.edit', compact('role', 'permissions', 'branches'));
     }
 
     /**
@@ -134,7 +173,8 @@ class RoleController extends Controller
     {
         $this->authorize('create', Role::class);
         $permissions = Permission::orderBy('name')->get();
-        return view('roles.create', compact('permissions'));
+        $branches = Branch::orderBy('name')->get();
+        return view('roles.create', compact('permissions', 'branches'));
     }
 
     public function update(Request $request, Role $role)
@@ -144,6 +184,7 @@ class RoleController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:roles,name,' . $role->id,
             'description' => 'nullable|string',
+            'branch_id' => 'nullable|integer|exists:branches,id',
         ]);
 
         $validated['is_active'] = (int) $request->input('is_active', 0);
@@ -162,6 +203,19 @@ class RoleController extends Controller
         $role->fill($validated);
         $role->is_active = $validated['is_active'];
         $role->save();
+
+        // Branch assignment: Developer may choose branch; others get their own branch automatically
+        try {
+            $currentUser = Auth::user();
+            if ($currentUser && $currentUser->isSuperAdmin() && $request->filled('branch_id')) {
+                $role->branch_id = $request->input('branch_id');
+            } else {
+                $role->branch_id = $currentUser->branch_id ?? null;
+            }
+            $role->save();
+        } catch (\Throwable $e) {
+            Log::warning('Failed to assign branch on role update: ' . $e->getMessage());
+        }
 
         return redirect()->route('roles.index')
             ->with('status', 'Role "' . $role->name . '" updated successfully.');
@@ -219,95 +273,54 @@ class RoleController extends Controller
             ->with('status', 'Role "' . $role->name . '" restored successfully.');
     }
 
-    public function managePriority(Role $role)
+    public function managePriority(Request $request, Role $role)
     {
         if (!Auth::user()->hasPermission('roles.manage-priority')) {
             abort(403, 'Unauthorized action.');
         }
 
-        $roles = Role::with([
-            'children' => function ($query) {
-                $query->withoutTrashed()->where('is_active', 1);
-            },
-            'parents' => function ($query) {
-                $query->withoutTrashed()->where('is_active', 1);
-            },
-            'users'
-        ])->where('is_active', 1)->get();
+        $currentUser = Auth::user();
+        $isDeveloper = $currentUser->isSuperAdmin();
 
-        $sortedRoles = $this->sortRolesByHierarchy($roles);
+        // Provide branches for the dropdown
+        $branches = Branch::orderBy('name')->get();
 
-        $isSuperAdmin = Auth::user()->isSuperAdmin();
-
-        $managedRoleIds = [];
-        $visibleRoleIds = [];
-
-        if (!$isSuperAdmin) {
-            $currentUser = Auth::user();
-            $userRole = $currentUser->role;
-            if ($userRole) {
-                $allDescendants = $userRole->getAllDescendantIds()->toArray();
-                $managedRoleIds = array_filter($allDescendants, function ($id) use ($userRole) {
-                    return $id !== $userRole->id;
-                });
-
-                $visibleRoleIds = $this->getVisibleRoleTree($userRole, $roles);
-            }
-
-            $sortedRoles = $sortedRoles->filter(function ($r) use ($visibleRoleIds) {
-                return in_array($r->id, $visibleRoleIds);
-            })->values();
+        // Determine selected branch: developer may choose via query, others default to their branch
+        if ($isDeveloper) {
+            $selectedBranchId = $request->query('branch_id', $branches->first()?->id ?? null);
+            $rolesForView = $selectedBranchId
+                ? Role::where('branch_id', $selectedBranchId)->orderBy('priority', 'asc')->get()
+                : collect([]);
+        } else {
+            $selectedBranchId = $currentUser->branch_id;
+            $rolesForView = Role::where(function ($q) use ($currentUser) {
+                $q->where('id', $currentUser->role_id)
+                  ->orWhereHas('users', function ($uq) use ($currentUser) {
+                      $uq->where('id', $currentUser->id);
+                  });
+            })->orderBy('priority', 'asc')->get();
         }
 
-        return view('roles.hierarchy', compact('role', 'roles', 'sortedRoles', 'isSuperAdmin', 'managedRoleIds', 'visibleRoleIds'));
+        $isHierarchyPage = true;
+        return view('roles.hierarchy', compact('role', 'branches', 'selectedBranchId', 'rolesForView', 'isDeveloper', 'isHierarchyPage'));
     }
 
     private function sortRolesByHierarchy($roles)
     {
-        $sorted = [];
-        $visited = [];
-
-        $rootRoles = $roles->filter(function ($role) {
-            return $role->parents->isEmpty();
-        });
-
-        $queue = $rootRoles->values()->all();
-
-        while (!empty($queue)) {
-            $current = array_shift($queue);
-
-            if (in_array($current->id, $visited)) {
-                continue;
-            }
-
-            $visited[] = $current->id;
-            $sorted[] = $current;
-
-            foreach ($current->children as $child) {
-                if (!in_array($child->id, $visited)) {
-                    $queue[] = $child;
-                }
-            }
-        }
-
-        foreach ($roles as $role) {
-            if (!in_array($role->id, $visited)) {
-                $sorted[] = $role;
-            }
-        }
-
-        return collect($sorted);
+        // Hierarchy removed — fall back to ordering by priority then name
+        return $roles->sortBy(function ($r) {
+            return [$r->priority ?? 100, $r->name];
+        })->values();
     }
 
     private function getVisibleRoleTree($userRole, $allRoles)
     {
-        $visibleIds = [];
-        $visibleIds[] = $userRole->id;
-        $descendants = $userRole->getAllDescendantIds()->toArray();
-        $descendants = array_filter($descendants, function ($id) use ($userRole) {
-            return $id !== $userRole->id;
-        });
-        $visibleIds = array_merge($visibleIds, $descendants);
+        $visibleIds = [$userRole->id];
+        if (method_exists($userRole, 'getAllDescendantIds') && \Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
+            $descendants = $userRole->getAllDescendantIds()->toArray();
+            $descendants = array_filter($descendants, fn($id) => $id !== $userRole->id);
+            $visibleIds = array_merge($visibleIds, $descendants);
+        }
         return array_unique($visibleIds);
     }
 
@@ -319,10 +332,24 @@ class RoleController extends Controller
 
         $validated = $request->validate([
             'parents' => 'nullable|array',
+            'priorities' => 'nullable|array',
+            'priorities.*' => 'nullable|integer|min:1|max:100',
         ]);
 
-        if (!isset($validated['parents'])) {
-            return back()->with('success', 'Role hierarchy updated successfully.');
+        // If the legacy role_hierarchies table is gone, treat this as a priority update
+        if (!\Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
+            $priorities = $validated['priorities'] ?? [];
+            $updatedCount = 0;
+            foreach ($priorities as $roleId => $priority) {
+                $role = Role::find($roleId);
+                if (!$role) continue;
+                $old = $role->priority ?? null;
+                $role->priority = (int)$priority;
+                $role->save();
+                if ($old !== $role->priority) $updatedCount++;
+            }
+
+            return back()->with('success', 'Role priorities updated successfully. ' . $updatedCount . ' role(s) updated.');
         }
 
         $currentUser = Auth::user();
@@ -359,16 +386,19 @@ class RoleController extends Controller
                 }
             }
 
-            $oldParents = $role->parents()->pluck('id')->toArray();
-            $role->parents()->sync($validParentIds);
+            $oldParents = [];
+            if (method_exists($role, 'parents') && \Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
+                $oldParents = $role->parents()->pluck('id')->toArray();
+                $role->parents()->sync($validParentIds);
 
-            if ($oldParents !== $validParentIds) {
-                AuditLog::log(
-                    'update_role_hierarchy',
-                    $role,
-                    ['parent_ids' => $oldParents],
-                    ['parent_ids' => $validParentIds]
-                );
+                if ($oldParents !== $validParentIds) {
+                    AuditLog::log(
+                        'update_role_hierarchy',
+                        $role,
+                        ['parent_ids' => $oldParents],
+                        ['parent_ids' => $validParentIds]
+                    );
+                }
             }
 
             $updatedCount++;
@@ -379,6 +409,9 @@ class RoleController extends Controller
 
     private function wouldCreateCircularOrRedundant($roleId, $parentId)
     {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
+            return false;
+        }
         $role = Role::find($roleId);
         $parent = Role::find($parentId);
 
@@ -390,11 +423,14 @@ class RoleController extends Controller
             return true;
         }
 
-        if ($role->isAncestorOf($parent)) {
+        if (method_exists($role, 'isAncestorOf') && $role->isAncestorOf($parent)) {
             return true;
         }
 
-        $currentParents = $role->parents()->pluck('id')->toArray();
+        $currentParents = [];
+        if (method_exists($role, 'parents') && \Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
+            $currentParents = $role->parents()->pluck('id')->toArray();
+        }
 
         foreach ($currentParents as $currentParentId) {
             if ($currentParentId == $parentId) {

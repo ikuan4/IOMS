@@ -73,7 +73,14 @@ class UserController extends Controller
                 break;
         }
 
-        $users = $query->paginate(10)->withQueryString();
+        // Respect per-page selection from query, with a safe whitelist and default 10
+        $allowed = [5,10,15,20,30];
+        $perPage = (int) $request->query('per_page', 10);
+        if (!in_array($perPage, $allowed, true)) {
+            $perPage = 10;
+        }
+
+        $users = $query->paginate($perPage)->withQueryString();
 
         return view('users.index', compact('users', 'search', 'status', 'statusCounts'));
     }
@@ -169,6 +176,7 @@ class UserController extends Controller
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'avatar' => ['nullable', 'image', 'max:2048'],
+            'remove_avatar' => ['nullable', 'boolean'],
             'active' => ['nullable', 'boolean'],
             'reset_bounce' => ['nullable', 'boolean'],
             'role_id' => ['required', 'exists:roles,id'],
@@ -208,6 +216,11 @@ class UserController extends Controller
                 Storage::disk('public')->delete($user->avatar);
             }
             $user->avatar = $request->file('avatar')->store('avatars', 'public');
+        } elseif ($request->boolean('remove_avatar')) {
+            if ($user->avatar) {
+                Storage::disk('public')->delete($user->avatar);
+            }
+            $user->avatar = null;
         }
 
         if ($request->boolean('reset_bounce')) {

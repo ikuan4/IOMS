@@ -17,11 +17,9 @@ class DummyRolesSeeder extends Seeder
             $branches = Branch::all();
         }
 
-        // Ensure Developer and Super Admin exist
+        // Ensure Developer role exists
         $special = [
-            ['name' => 'Super Admin', 'slug' => 'super-admin', 'is_active' => 1],
             ['name' => 'Developer', 'slug' => 'developer', 'is_active' => 1],
-            ['name' => 'Admin', 'slug' => 'admin', 'is_active' => 1],
         ];
 
         foreach ($special as $r) {
