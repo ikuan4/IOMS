@@ -1,4 +1,3 @@
-"""PATCH_REPLACE_START"""
 @extends('layouts.dashboard')
 
 @section('title', 'Roles by Branch')
@@ -39,21 +38,21 @@
         <div class="card" style="padding:16px;">
             <h5 style="margin:0 0 10px 0;font-size:16px;font-weight:600;">Roles</h5>
             @if($rolesForView && $rolesForView->count())
-                <table style="width:100%;border-collapse:collapse;">
+                <table class="roles-table">
                     <thead>
-                        <tr style="text-align:left;border-bottom:1px solid #e5e7eb;">
-                            <th style="padding:10px;">Role</th>
-                            <th style="padding:10px;">Description</th>
-                            <th style="padding:10px;width:120px;">Priority</th>
+                        <tr>
+                            <th>Role</th>
+                            <th>Description</th>
+                            <th style="width:120px;">Priority</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($rolesForView as $r)
-                            <tr style="border-bottom:1px solid #f3f4f6;">
-                                <td style="padding:10px;font-weight:700;">{{ $r->name }}</td>
-                                <td style="padding:10px;color:#6b7280;font-size:13px;">{{ $r->description ?? '—' }}</td>
-                                <td style="padding:10px;">
-                                    <span style="display:inline-block;background:#eef2ff;color:#1e40af;padding:6px 10px;border-radius:8px;font-weight:700;">{{ $r->priority ?? 100 }}</span>
+                            <tr>
+                                <td style="font-weight:700;">{{ $r->name }}</td>
+                                <td class="muted" style="font-size:13px;">{{ $r->description ?? '—' }}</td>
+                                <td>
+                                    <span class="pill">{{ $r->priority ?? 100 }}</span>
                                 </td>
                             </tr>
                         @endforeach
@@ -66,4 +65,3 @@
     </div>
 
 @endsection
-"""PATCH_REPLACE_END"""

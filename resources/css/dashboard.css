@@ -6,6 +6,8 @@
   --muted: #98a2b3;
   --text: #0f1724;
   --accent: #206bc4;
+  --badge-bg: #eef2ff;
+  --badge-text: #1e40af;
   --sidebar: #ffffff;
   --shadow: 0 8px 30px rgba(20,24,28,0.06);
   --radius: 12px;
@@ -19,9 +21,22 @@
   --muted: #9aa6b2;
   --text: #e6eef6;
   --accent: #4dabf7;
+  --badge-bg: rgba(79,70,229,0.12);
+  --badge-text: #c7d9ff;
   --sidebar: #0b1220;
   --shadow: 0 10px 30px rgba(2,6,23,0.7);
 }
+
+/* Roles table / badge */
+.roles-table{width:100%;border-collapse:collapse}
+.roles-table thead tr{border-bottom:1px solid rgba(0,0,0,0.06)}
+.roles-table th{padding:10px;text-align:left;font-weight:600}
+.roles-table td{padding:10px;border-bottom:1px solid rgba(0,0,0,0.04)}
+.roles-table .muted{color:var(--muted)}
+.pill{display:inline-block;padding:6px 10px;border-radius:8px;font-weight:700;background:var(--badge-bg);color:var(--badge-text)}
+
+[data-theme="dark"] .roles-table thead tr{border-bottom:1px solid rgba(255,255,255,0.06)}
+[data-theme="dark"] .roles-table td{border-bottom:1px solid rgba(255,255,255,0.03)}
 
 /* Body */
 body{

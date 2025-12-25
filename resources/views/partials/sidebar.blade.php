@@ -46,16 +46,16 @@
                     <span class="label">Manage Roles</span>
                 </a>
                 @endif
-                @if((auth()->user()->isSuperAdmin() ) || (auth()->user()->hasPermission('roles.manage-priority') && \Illuminate\Support\Facades\Route::has('roles.hierarchy')))
-                <a href="{{ route('roles.hierarchy', request()->route('role') ?? \App\Models\Role::first()->id ?? 1) }}" class="{{ ($isHierarchyPage ?? false) ? 'active' : '' }}">
-                    <span class="label">Role Hierarchy</span>
-                </a>
-                @endif
                 @can('viewAny', \App\Models\Branch::class)
                 <a href="{{ route('branches.index') }}" class="{{ request()->routeIs('branches.*') ? 'active' : '' }}">
                     <span class="label">Manage Branches</span>
                 </a>
                 @endcan
+                @if((auth()->user()->isSuperAdmin() ) || (auth()->user()->hasPermission('roles.manage-priority') && \Illuminate\Support\Facades\Route::has('roles.hierarchy')))
+                <a href="{{ route('roles.hierarchy', request()->route('role') ?? \App\Models\Role::first()->id ?? 1) }}" class="{{ ($isHierarchyPage ?? false) ? 'active' : '' }}">
+                    <span class="label">Role Hierarchy</span>
+                </a>
+                @endif
                 {{-- Legacy hierarchy link removed --}}
             </div>
         </div>
