@@ -64,6 +64,10 @@ Route::get('/dashboard', function () {
 Route::middleware('auth')->group(function () {
     Route::resource('roles', RoleController::class); // Register roles resource routes
 
+    // Ajax: return count of active mapped users for a role
+    Route::get('/roles/{role}/mapped-active-users', [RoleController::class, 'mappedActiveUsers'])
+        ->name('roles.mapped_active_users');
+
     // Role restore
     Route::post('/roles/{id}/restore', [RoleController::class, 'restore'])
         ->name('roles.restore');

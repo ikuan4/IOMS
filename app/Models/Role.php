@@ -40,13 +40,22 @@ class Role extends SpatieRole
         'is_active',
         'priority',
         'branch_id',
+        'created_by',
+        'updated_by',
+        'deleted_by',
+        'restored_by',
     ];
-    
+
     protected $casts = [
         'guard_name' => 'string',
         'is_active' => 'boolean',
         'priority' => 'integer',
         'branch_id' => 'integer',
+        'created_by' => 'integer',
+        'updated_by' => 'integer',
+        'deleted_by' => 'integer',
+        'restored_by' => 'integer',
+        'restored_at' => 'datetime',
     ];
 
     /**

@@ -6,10 +6,6 @@
     <div class="header-card">
         <div class="header-left">
             <h2>BRANCH: {{ $branch->name }}</h2>
-            <p class="muted">Details and users for this branch.</p>
-        </div>
-        <div class="header-right">
-            <a href="{{ route('branches.edit', $branch->id) }}" style="background:#e0f2fe;color:#0369a1;padding:8px 16px;border-radius:8px;">Edit Branch</a>
         </div>
     </div>
 
@@ -17,13 +13,21 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
             <h3 style="margin:0;">Assigned Users ({{ $branch->users()->count() }})</h3>
 
+
             <div style="display:flex;gap:8px;align-items:center;">
+                <button type="button" onclick="history.back(); return false;" title="Back to Previous Page" style="background:#22c55e;color:#ffffff;padding:12px 16px;border-radius:10px;border:1px solid #16a34a;display:inline-flex;align-items:center;gap:10px;cursor:pointer;margin-right:6px;font-weight:700;font-size:15px;height:44px;">
+                    <span data-feather="arrow-left" style="width:18px;height:18px;display:inline-block;color:inherit;"></span>
+                    <span style="font-weight:700;font-size:15px;line-height:1;color:inherit;">Back to Previous Page</span>
+                </button>
                 <form method="GET" id="branchUserSearchForm" action="" style="margin:0;">
-                    <input type="text" name="search" id="branchUserSearch" placeholder="Search users in branch..." value="{{ request('search') }}" style="padding:10px 12px;border-radius:8px;border:1px solid #d0d7e0;min-width:260px;" oninput="debouncedAjaxSearch()" />
+                    <input type="text" name="search" id="branchUserSearch" placeholder="Search users in branch..." value="{{ request('search') }}" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" oninput="debouncedAjaxSearch()" />
                 </form>
 
                 @can('export', $branch)
-                    <a id="branchExportBtn" href="{{ route('branches.export', array_merge(['branch' => $branch->id], request()->only('search'))) }}" style="background:#f8fafc;color:#0f172a;padding:8px 12px;border-radius:8px;text-decoration:none;border:1px solid #e2e8f0;">Export CSV</a>
+                    <a id="branchExportBtn" href="{{ route('branches.export', array_merge(['branch' => $branch->id], request()->only('search'))) }}" style="background:#f8fafc;color:#0f172a;padding:12px 16px;border-radius:10px;text-decoration:none;border:1px solid #e2e8f0;display:inline-flex;align-items:center;gap:10px;height:44px;font-weight:700;font-size:15px;">
+                        <img src="{{ asset('images/excel-logo.png') }}" alt="Excel" style="width:28px;height:28px;display:block;" />
+                        <span>Export CSV</span>
+                    </a>
                 @endcan
             </div>
         </div>

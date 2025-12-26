@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Traits\HasAuditFields;
 
 class AuditLog extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes, HasAuditFields;
 
     protected $fillable = [
         'user_id',
@@ -18,11 +20,17 @@ class AuditLog extends Model
         'new_values',
         'ip_address',
         'user_agent',
+        'deleted_by',
+        'restored_by',
     ];
 
     protected $casts = [
         'old_values' => 'array',
         'new_values' => 'array',
+        'deleted_at' => 'datetime',
+        'restored_at' => 'datetime',
+        'deleted_by' => 'integer',
+        'restored_by' => 'integer',
     ];
 
     /**

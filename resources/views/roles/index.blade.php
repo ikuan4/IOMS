@@ -426,11 +426,10 @@
                                 @endif
 
                                 @if(\Illuminate\Support\Facades\Gate::allows('delete', $role))
-                                @if($role->users->count() === 0)
                                     <form action="{{ route('roles.destroy', $role->id) }}"
                                           method="POST"
                                           style="display:inline-block; margin-right:9px;"
-                                          onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete Role', subtitle: 'This will soft delete the role', message: 'Are you sure you want to delete {{ $role->name }}? This action can be reversed later.', confirmText: 'Delete Role', form: this});">
+                                          onsubmit="event.preventDefault(); checkRoleMappedUsers(this, '{{ $role->id }}', '{{ addslashes($role->name) }}');">
                                         @csrf
                                         @method('DELETE')
 
@@ -451,7 +450,9 @@
                                             <span data-feather="trash-2"></span>
                                         </button>
                                     </form>
-                                @endif
+                                    @if(\Illuminate\Support\Facades\Gate::allows('view', $role))
+                                        <a href="{{ route('roles.show', $role->id) }}" title="View role" style="background:#f8fafc;color:#0f172a;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-left:6px;text-decoration:none;"><span data-feather="eye"></span></a>
+                                    @endif
                                 @else
                                     {{-- Placeholder to maintain spacing for delete icon position (increased by 55%) --}}
                                     <div style="display:inline-block; width:48px; height:36px; margin-right:9px;"></div>
@@ -543,6 +544,47 @@
                         <span aria-hidden="true" style="padding:6px 10px;color:{{ $lastColor }};font-weight:800;font-size:14px;">&raquo;</span>
                     @endif
                 </nav>
+
+    <script>
+        async function checkRoleMappedUsers(form, roleId, roleName) {
+            try {
+                const url = `{{ url('/') }}/roles/${roleId}/mapped-active-users`;
+                const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (!res.ok) throw new Error('Network error');
+                const data = await res.json();
+                const count = parseInt(data.count || 0, 10);
+                if (count <= 0) {
+                    // no mapped active users — submit immediately
+                    form.submit();
+                    return;
+                }
+
+                // create hidden input to signal server to soft-delete mapped users on confirm
+                let input = form.querySelector('input[name="soft_delete_mapped_users"]');
+                if (!input) {
+                    input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'soft_delete_mapped_users';
+                    form.appendChild(input);
+                }
+                input.value = '1';
+
+                // show modal with customized message
+                showConfirmModal({
+                    type: 'delete',
+                    title: 'Confirm Deletion',
+                    subtitle: '',
+                    message: `Role "${roleName}" is assigned to ${count} active user${count===1? '' : 's'}. Confirm deletion? This will also soft-delete those active users.`,
+                    confirmText: 'Delete Role',
+                    form: form
+                });
+            } catch (e) {
+                console.error(e);
+                // fallback: submit the form
+                form.submit();
+            }
+        }
+    </script>
             </div>
 
             <div style="flex:1; min-width:180px; display:flex; justify-content:flex-end; align-items:center; gap:8px;">

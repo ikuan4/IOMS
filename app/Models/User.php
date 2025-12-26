@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Permission;
@@ -25,7 +26,7 @@ use App\Models\Permission;
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasFactory, Notifiable, SoftDeletes, HasAuditFields;
 
     /**
      * The attributes that are mass assignable.
@@ -73,12 +74,14 @@ class User extends Authenticatable
             'mobile_verified_at' => 'datetime',
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
+            'deleted_at' => 'datetime',
             'last_updated_at' => 'datetime',
             'last_updated_by' => 'integer',
             'created_by' => 'integer',
             'updated_by' => 'integer',
             'deleted_by' => 'integer',
             'restored_by' => 'integer',
+            'restored_at' => 'datetime',
             'email_bounced_at' => 'datetime',
             'email_bounce_count' => 'integer',
             'active' => 'boolean',
@@ -203,6 +206,19 @@ class User extends Authenticatable
     }
 
     /**
+     * Determine whether this user can manage the given role.
+     */
+    public function canManageRole(Role $role): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $manageable = $this->getManageableRoles()->pluck('id')->toArray();
+        return in_array($role->id, $manageable, true);
+    }
+
+    /**
      * Alias for role selection in controllers/views.
      */
     public function getAvailableRolesForAssignment()
@@ -230,6 +246,31 @@ class User extends Authenticatable
     public function branch()
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(self::class, 'created_by');
+    }
+
+    public function updatedBy()
+    {
+        return $this->belongsTo(self::class, 'updated_by');
+    }
+
+    public function lastUpdatedBy()
+    {
+        return $this->belongsTo(self::class, 'last_updated_by');
+    }
+
+    public function deletedBy()
+    {
+        return $this->belongsTo(self::class, 'deleted_by');
+    }
+
+    public function restoredBy()
+    {
+        return $this->belongsTo(self::class, 'restored_by');
     }
 
     /**

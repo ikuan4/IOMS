@@ -148,15 +148,18 @@
                             <a href="{{ route('users.edit', $user) }}" style="background:#e0f2fe;color:#0369a1;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-right:6px;text-decoration:none;" title="Edit user"><span data-feather="edit"></span></a>
                             @endif
                             @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('delete', $user))
-                            <form action="{{ route('users.destroy', $user) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete User', subtitle: 'This will soft delete the user', message: 'Are you sure you want to delete {{ $user->name }}? This action can be reversed later.', confirmText: 'Delete User', form: this});">
+                            <form action="{{ route('users.destroy', $user) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete User', subtitle: 'This will soft delete the user', message: 'Are you sure you want to delete {{ $user->name }}?', confirmText: 'Delete User', form: this});">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" style="background:#fee2e2;color:#b91c1c;padding:10px 12px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;" title="Soft delete user"><span data-feather="trash-2"></span></button>
                             </form>
+                                @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('view', $user))
+                                <a href="{{ route('users.show', $user) }}" title="View user" style="background:#f8fafc;color:#0f172a;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-left:6px;text-decoration:none;"><span data-feather="eye"></span></a>
+                                @endif
                             @endif
                         @else
                             @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('restore', $user))
-                            <form action="{{ route('users.restore', $user->id) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'restore', title: 'Restore User', subtitle: 'This will restore the user', message: 'Are you sure you want to restore {{ $user->name }}? The user will be active again.', confirmText: 'Restore User', form: this});">
+                            <form action="{{ route('users.restore', $user->id) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'restore', title: 'Restore User', subtitle: 'This will restore the user', message: 'Are you sure you want to restore {{ $user->name }}?', confirmText: 'Restore User', form: this});">
                                 @csrf
                                 @if(!empty($search))<input type="hidden" name="search" value="{{ $search }}">@endif
                                 <button type="submit" style="background:#dcfce7;color:#15803d;padding:10px 12px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;" title="Restore user"><span data-feather="rotate-ccw"></span></button>

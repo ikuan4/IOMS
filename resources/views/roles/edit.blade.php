@@ -20,7 +20,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('roles.update', $role->id) }}">
+    <form method="POST" action="{{ route('roles.update', $role->id) }}" onsubmit="event.preventDefault(); checkRoleDeactivate(this, '{{ $role->id }}', '{{ addslashes($role->name) }}');">
         @csrf
         @method('PUT')
 
@@ -192,6 +192,8 @@
             </a>
         </div>
     </form>
+    @include('partials.confirmation-modal')
+
 @endsection
 
 @push('scripts')
@@ -213,6 +215,52 @@
         } else {
             toggleSwitch.style.background = '#cbd5e1';
             knob.style.left = '3px';
+        }
+    }
+</script>
+<script>
+    async function checkRoleDeactivate(form, roleId, roleName) {
+        try {
+            // Determine if the form is attempting to deactivate the role (checkbox unchecked)
+            const checkbox = form.querySelector('input[name="is_active"]');
+            const wantsActive = checkbox && checkbox.checked;
+            // If still active or no change, just submit
+            if (wantsActive) {
+                form.submit();
+                return;
+            }
+
+            const url = `{{ url('/') }}/roles/${roleId}/mapped-active-users`;
+            const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!res.ok) throw new Error('Network error');
+            const data = await res.json();
+            const count = parseInt(data.count || 0, 10);
+
+            if (count <= 0) {
+                form.submit();
+                return;
+            }
+
+            let input = form.querySelector('input[name="deactivate_mapped_users"]');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'deactivate_mapped_users';
+                form.appendChild(input);
+            }
+            input.value = '1';
+
+            showConfirmModal({
+                type: 'delete',
+                title: 'Confirm Deactivation',
+                subtitle: '',
+                message: `Role "${roleName}" is assigned to ${count} active user${count===1? '' : 's'}. Confirm deactivation? This will set those users to inactive.`,
+                confirmText: 'Deactivate Role',
+                form: form
+            });
+        } catch (e) {
+            console.error(e);
+            form.submit();
         }
     }
 </script>

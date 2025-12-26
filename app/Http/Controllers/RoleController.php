@@ -89,6 +89,13 @@ class RoleController extends Controller
 
         $roles = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
 
+        // remember the current roles list URL so the role details page can return here
+        try {
+            session(['roles_list_back_url' => $request->fullUrl()]);
+        } catch (\Throwable $__e) {
+            // ignore session issues
+        }
+
         // Get users by role if requested (AJAX) — return normalized JSON shape
         $roleId = $request->query('role_id');
         if ($roleId && $request->ajax()) {
@@ -207,8 +214,45 @@ class RoleController extends Controller
 
         $validated['slug'] = $slug;
 
+        // If role is being deactivated, handle mapped active users when requested
+        $wasActive = (bool) $role->is_active;
+        $willBeActive = (bool) $validated['is_active'];
+
+        if ($wasActive && !$willBeActive) {
+            // Prevent deactivating own role
+            $currentUser = Auth::user();
+            assert($currentUser instanceof User);
+            if ($currentUser->role_id === $role->id) {
+                return redirect()->route('roles.index')
+                    ->with('error', 'You cannot deactivate your own role.');
+            }
+
+            $deactivateFlag = $request->boolean('deactivate_mapped_users');
+            // Count active mapped users
+            $pivotUsers = $role->users()->where('active', true)->whereNull('users.deleted_at')->get();
+            $directUsers = User::where('role_id', $role->id)->where('active', true)->whereNull('deleted_at')->get();
+            $users = $pivotUsers->concat($directUsers)->unique('id');
+
+            if ($users->count() > 0 && !$deactivateFlag) {
+                // Ask for confirmation if not provided; do not persist changes yet
+                return redirect()->back()->withInput()->with('error', 'Role "' . $role->name . '" is assigned to ' . $users->count() . ' active user(s). Confirm deactivation to set them inactive.');
+            }
+
+            if ($deactivateFlag) {
+                foreach ($users as $u) {
+                    try {
+                        $u->active = false;
+                        $u->save();
+                    } catch (\Throwable $__e) {
+                        // ignore individual failures
+                    }
+                }
+            }
+        }
+
+        // Persist role changes after handling mapped users
         $role->fill($validated);
-        $role->is_active = $validated['is_active'];
+        $role->is_active = $willBeActive;
         $role->save();
 
         // Branch assignment: Developer may choose branch; others get their own branch automatically
@@ -229,7 +273,7 @@ class RoleController extends Controller
             ->with('status', 'Role "' . $role->name . '" updated successfully.');
     }
 
-    public function destroy(Role $role): RedirectResponse
+    public function destroy(Request $request, Role $role): RedirectResponse
     {
         $this->authorize('delete', $role);
 
@@ -245,9 +289,26 @@ class RoleController extends Controller
                 ->with('error', 'You cannot delete your own role.');
         }
 
-        if ($role->users()->count() > 0) {
-            return redirect()->route('roles.index')
-                ->with('error', 'Cannot delete role with assigned users. Reassign or remove users first.');
+
+
+        // If confirmation provided, soft-delete active mapped users first
+        if ($request->boolean('soft_delete_mapped_users')) {
+            try {
+                $currentUser = Auth::user();
+                // Gather active mapped users (pivot + direct) and soft-delete them
+                $pivotUsers = $role->users()->where('active', true)->whereNull('users.deleted_at')->get();
+                $directUsers = User::where('role_id', $role->id)->where('active', true)->whereNull('deleted_at')->get();
+                $users = $pivotUsers->concat($directUsers)->unique('id');
+                foreach ($users as $u) {
+                    try {
+                        $u->delete();
+                    } catch (\Throwable $__e) {
+                        // ignore individual failures
+                    }
+                }
+            } catch (\Throwable $__e) {
+                // ignore
+            }
         }
 
         $name = $role->name;
@@ -282,6 +343,17 @@ class RoleController extends Controller
 
         return redirect()->route('roles.index')
             ->with('status', 'Role "' . $role->name . '" restored successfully.');
+    }
+
+    /**
+     * Return JSON with count of active mapped users for the given role.
+     */
+    public function mappedActiveUsers(Role $role)
+    {
+        $this->authorize('view', $role);
+        $pivotUsersCount = $role->users()->where('active', true)->whereNull('users.deleted_at')->count();
+        $directUsersCount = User::where('role_id', $role->id)->where('active', true)->whereNull('deleted_at')->count();
+        return response()->json(['count' => ($pivotUsersCount + $directUsersCount)]);
     }
 
     public function managePriority(Request $request, Role $role): ContractView
@@ -375,7 +447,7 @@ class RoleController extends Controller
             return back()->with('success', 'Role priorities updated successfully. ' . $updatedCount . ' role(s) updated.');
         }
 
-        
+
         $updatedCount = 0;
         foreach ($validated['parents'] as $roleId => $data) {
             $role = Role::find($roleId);

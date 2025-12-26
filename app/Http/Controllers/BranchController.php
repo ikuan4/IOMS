@@ -68,10 +68,24 @@ class BranchController extends Controller
             });
         }
 
-        $users = $usersQuery->orderBy('name')->paginate(15)->withQueryString();
+        // Respect per-page selection from query, with a safe whitelist and default 10
+        $allowed = [5,10,15,20,30];
+        $perPage = (int) $request->query('per_page', 10);
+        if (!in_array($perPage, $allowed, true)) {
+            $perPage = 10;
+        }
+
+        $users = $usersQuery->orderBy('name')->paginate($perPage)->withQueryString();
 
         if ($request->ajax()) {
             return view('branches._users_table', compact('users'));
+        }
+
+        // remember the current branch users list URL so user details can return here
+        try {
+            session(['users_list_back_url' => $request->fullUrl()]);
+        } catch (\Throwable $__e) {
+            // ignore session issues
         }
 
         return view('branches.show', compact('branch', 'users'));
@@ -91,7 +105,7 @@ class BranchController extends Controller
             });
         }
 
-        $filename = 'branch-' . $branch->id . '-users-' . date('Ymd_His') . '.csv';
+        $filename = 'branch-' . $branch->getKey() . '-users-' . date('Ymd_His') . '.csv';
 
         $callback = function() use ($usersQuery) {
             $handle = fopen('php://output', 'w');
@@ -123,7 +137,7 @@ class BranchController extends Controller
     {
         $this->authorize('update', $branch);
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:branches,name,' . $branch->id,
+            'name' => 'required|string|max:255|unique:branches,name,' . $branch->getKey(),
         ]);
         $branch->update([
             'name' => $validated['name'],
@@ -149,7 +163,20 @@ class BranchController extends Controller
         if (! $branch->trashed()) {
             return redirect()->route('branches.index')->with('status', 'Branch is not deleted.');
         }
-        $branch->restore();
+
+        if (method_exists($branch, 'restoreWithUser')) {
+            try { $branch->restoreWithUser(); } catch (\Throwable $__e) { $branch->restore(); }
+        } else {
+            $branch->restore();
+            try {
+                $branch->restored_by = optional(Auth::user())->id;
+                try { if (\Illuminate\Support\Facades\Schema::hasColumn($branch->getTable(), 'restored_at')) { $branch->restored_at = now(); } } catch (\Throwable $__e) {}
+                $branch->save();
+            } catch (\Throwable $__e) {
+                // ignore
+            }
+        }
+
         return redirect()->route('branches.index')->with('status', 'Branch restored.');
     }
 }

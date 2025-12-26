@@ -4,6 +4,7 @@ namespace App\Traits;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 
 trait HasAuditFields
 {
@@ -86,6 +87,15 @@ trait HasAuditFields
 
             if (isset($this->name) && str_starts_with($this->name, 'Deleted ')) {
                 $this->name = substr($this->name, 8);
+            }
+
+            // set restored_at when column exists
+            try {
+                if (Schema::hasColumn($this->getTable(), 'restored_at')) {
+                    $this->restored_at = now();
+                }
+            } catch (\Throwable $__e) {
+                // ignore schema checks on broken environments
             }
 
             $this->saveQuietly();

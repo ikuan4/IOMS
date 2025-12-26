@@ -4,12 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Spatie\Permission\Models\Permission as SpatiePermission;
-// Soft deletes removed: permissions table in this project does not have deleted_at
+use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\HasAuditFields;
 
 class Permission extends SpatiePermission
 {
-    use HasFactory, HasAuditFields;
+    use HasFactory, SoftDeletes, HasAuditFields;
 
     protected $guard_name = 'web';
 
@@ -23,6 +23,13 @@ class Permission extends SpatiePermission
         'updated_by',
         'deleted_by',
         'restored_by',
+    ];
+
+    protected $casts = [
+        'deleted_at' => 'datetime',
+        'restored_at' => 'datetime',
+        'deleted_by' => 'integer',
+        'restored_by' => 'integer',
     ];
 
     public function scopeByGroup($query, $group)
