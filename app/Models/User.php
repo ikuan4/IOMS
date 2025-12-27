@@ -9,8 +9,12 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Eloquent\Collection;
 use App\Models\Permission;
+use App\Models\Role;
+use App\Models\Branch;
 
 /**
  * @property int $id
@@ -22,10 +26,18 @@ use App\Models\Permission;
  * @property int|null $branch_id
  * @property bool $active
  * @property \Illuminate\Database\Eloquent\Collection|Permission[] $permissions
+ * @property \Illuminate\Database\Eloquent\Collection|Role[] $roles
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ * @property int|null $deleted_by
+ * @property int|null $restored_by
+ * @property \Illuminate\Support\Carbon|null $restored_at
+ * @property-read \App\Models\Role|null $role
+ * @property-read \App\Models\Branch|null $branch
  */
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<\\Database\\Factories\\UserFactory> */
     use HasFactory, Notifiable, SoftDeletes, HasAuditFields;
 
     /**
@@ -91,9 +103,24 @@ class User extends Authenticatable
         ];
     }
 
-    public function role()
+    // BelongsTo relation to Role
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Role, $this>
+     */
+    public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class);
+    }
+
+    /**
+     * Roles assigned via pivot model_has_roles
+     */
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\Role, $this>
+     */
+    public function roles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Role::class, 'model_has_roles', 'model_id', 'role_id');
     }
 
     /**
@@ -113,8 +140,10 @@ class User extends Authenticatable
     /**
      * Check if user has a specific permission (custom system).
      * Protected Super Admin user bypasses all permission checks.
+     *
+     * @param mixed $permission  Array of slugs, single slug string, or object with ->slug
      */
-    public function hasPermission($permission)
+    public function hasPermission(mixed $permission): bool
     {
         if ($this->isSuperAdmin()) {
             return true;
@@ -153,25 +182,27 @@ class User extends Authenticatable
     }
 
     /**
-     * Get all permissions from user's role.
+     * @return Collection<int, \App\Models\Permission>
      */
-    public function getAllPermissions()
+    public function getAllPermissions(): Collection
     {
         if ($this->isSuperAdmin()) {
             return Permission::all();
         }
 
         if (!$this->role) {
-            return collect([]);
+            return new Collection();
         }
 
-        return $this->role->permissions;
+        return $this->role->permissions()->get();
     }
 
     /**
      * Get manageable roles for this user (descendants of user's role).
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\Role>
      */
-    public function getManageableRoles()
+    public function getManageableRoles(): \Illuminate\Support\Collection
     {
         // Developer sees all active roles
         if ($this->isSuperAdmin()) {
@@ -208,6 +239,9 @@ class User extends Authenticatable
     /**
      * Determine whether this user can manage the given role.
      */
+    /**
+     * @param \App\Models\Role $role
+     */
     public function canManageRole(Role $role): bool
     {
         if ($this->isSuperAdmin()) {
@@ -215,21 +249,26 @@ class User extends Authenticatable
         }
 
         $manageable = $this->getManageableRoles()->pluck('id')->toArray();
+
         return in_array($role->id, $manageable, true);
     }
 
     /**
      * Alias for role selection in controllers/views.
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\Role>
      */
-    public function getAvailableRolesForAssignment()
+    public function getAvailableRolesForAssignment(): \Illuminate\Support\Collection
     {
         return $this->getManageableRoles();
     }
 
     /**
      * Get manageable users for this user (users with descendant roles).
+     *
+     * @return \Illuminate\Support\Collection<int, \App\Models\User>
      */
-    public function getManageableUsers()
+    public function getManageableUsers(): \Illuminate\Support\Collection
     {
         if ($this->isSuperAdmin()) {
             return User::withTrashed()->where('id', '!=', $this->id)->with('role')->get();
@@ -243,32 +282,56 @@ class User extends Authenticatable
             ->get();
     }
 
-    public function branch()
+    // BelongsTo relation to Branch
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Branch, $this>
+     */
+    public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
     }
 
-    public function createdBy()
+    // BelongsTo relation createdBy
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function createdBy(): BelongsTo
     {
         return $this->belongsTo(self::class, 'created_by');
     }
 
-    public function updatedBy()
+    // BelongsTo relation updatedBy
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(self::class, 'updated_by');
     }
 
-    public function lastUpdatedBy()
+    // BelongsTo relation lastUpdatedBy
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function lastUpdatedBy(): BelongsTo
     {
         return $this->belongsTo(self::class, 'last_updated_by');
     }
 
-    public function deletedBy()
+    // BelongsTo relation deletedBy
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function deletedBy(): BelongsTo
     {
         return $this->belongsTo(self::class, 'deleted_by');
     }
 
-    public function restoredBy()
+    // BelongsTo relation restoredBy
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function restoredBy(): BelongsTo
     {
         return $this->belongsTo(self::class, 'restored_by');
     }
@@ -276,6 +339,8 @@ class User extends Authenticatable
     /**
      * Automatically hash password when set.
      * Usage: $user->password = 'plain'; (will be hashed)
+     *
+     * @return \Illuminate\Database\Eloquent\Casts\Attribute<mixed,mixed>
      */
     protected function password(): Attribute
     {

@@ -5,6 +5,7 @@ parameters:
   level: 8
   paths:
     - app
+  treatPhpDocTypesAsCertain: false
   bootstrapFiles:
     - vendor/autoload.php
   inferPrivatePropertyTypeFromConstructor: true
@@ -13,6 +14,12 @@ parameters:
     - vendor/*
     - storage/*
     - bootstrap/cache/*
+
+  # Suppress specific known false-positive categories from Larastan/PHPStan
+  ignoreErrors:
+    - '#uses generic trait .*HasFactory.*does not specify its types#'
+    - '#Call to function method_exists.*will always evaluate to true.#'
+
 
 services:
   # Larastan provides many services; keep defaults for now

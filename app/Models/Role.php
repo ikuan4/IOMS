@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Spatie\Permission\Models\Role as SpatieRole;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\DB;
 use App\Traits\HasAuditFields;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -26,10 +27,17 @@ use App\Models\Permission;
  * @property int|null $branch_id
  * @property EloquentCollection|Permission[] $permissions
  * @property EloquentCollection|User[] $users
+ * @property-read \App\Models\User|null $deletedBy
 */
+/**
+ * @use \Illuminate\Database\Eloquent\Factories\HasFactory<\Database\Factories\RoleFactory>
+ */
+/**
+ * @property int $id
+ */
 class Role extends SpatieRole
 {
-    use SoftDeletes, HasAuditFields;
+    use HasFactory, SoftDeletes, HasAuditFields;
 
     protected string $guard_name = 'web';
 
@@ -96,6 +104,51 @@ class Role extends SpatieRole
     {
         return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
             ->withTimestamps();
+    }
+
+    /**
+     * Permissions assigned to this role (Spatie pivot table `role_has_permissions`).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\Permission, $this, \Illuminate\Database\Eloquent\Relations\Pivot, 'pivot'>
+     */
+    public function permissions(): BelongsToMany
+    {
+        return $this->belongsToMany(Permission::class, 'role_has_permissions', 'role_id', 'permission_id');
+    }
+
+    // --- Legacy hierarchy stubs (present to satisfy static analysis when hierarchy package/table removed) ---
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\Role, $this>
+     */
+    public function parents(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'role_hierarchies', 'child_id', 'parent_id');
+    }
+
+    /**
+     * Return an empty collection by default. Real implementation existed in hierarchy package.
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    public function getAllDescendantIds(): \Illuminate\Support\Collection
+    {
+        return collect([]);
+    }
+
+    /**
+     * Legacy stub: determine ancestor relationship.
+     */
+    public function isAncestorOf(Role $role): bool
+    {
+        return false;
+    }
+
+    /**
+     * Legacy stub: return ancestor ids.
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    public function getAllAncestorIds(): \Illuminate\Support\Collection
+    {
+        return collect([]);
     }
 
     /**

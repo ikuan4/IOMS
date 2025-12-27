@@ -5,10 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class BranchController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request): View
     {
         $this->authorize('viewAny', Branch::class);
         // include trashed so deleted branches can be restored from the index
@@ -29,13 +32,13 @@ class BranchController extends Controller
         return view('branches.index', compact('branches'));
     }
 
-    public function create()
+    public function create(): View
     {
         $this->authorize('create', Branch::class);
         return view('branches.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         $this->authorize('create', Branch::class);
         $validated = $request->validate([
@@ -48,19 +51,19 @@ class BranchController extends Controller
         return redirect()->route('branches.index')->with('status', 'Branch created.');
     }
 
-    public function edit(Branch $branch)
+    public function edit(Branch $branch): View
     {
         $this->authorize('update', $branch);
         return view('branches.edit', compact('branch'));
     }
 
-    public function show(Request $request, Branch $branch)
+    public function show(Request $request, Branch $branch): View
     {
         $this->authorize('view', $branch);
 
         $usersQuery = $branch->users()->with('role');
         if ($request->filled('search')) {
-            $s = $request->search;
+            $s = (string) $request->search;
             $usersQuery->where(function($q) use ($s) {
                 $q->where('name', 'like', "%{$s}%")
                   ->orWhere('email', 'like', "%{$s}%")
@@ -91,13 +94,13 @@ class BranchController extends Controller
         return view('branches.show', compact('branch', 'users'));
     }
 
-    public function export(Request $request, Branch $branch)
+    public function export(Request $request, Branch $branch): StreamedResponse
     {
         $this->authorize('export', $branch);
 
         $usersQuery = $branch->users()->with('role');
         if ($request->filled('search')) {
-            $s = $request->search;
+            $s = (string) $request->search;
             $usersQuery->where(function($q) use ($s) {
                 $q->where('name', 'like', "%{$s}%")
                   ->orWhere('email', 'like', "%{$s}%")
@@ -108,10 +111,14 @@ class BranchController extends Controller
         $filename = 'branch-' . $branch->getKey() . '-users-' . date('Ymd_His') . '.csv';
 
         $callback = function() use ($usersQuery) {
-            $handle = fopen('php://output', 'w');
+            $handle = @fopen('php://output', 'w');
+            if ($handle === false) {
+                return;
+            }
             fputcsv($handle, ['ID','Name','Email','Mobile','Roles','Status','Created At']);
             $usersQuery->chunk(200, function($users) use ($handle) {
                 foreach ($users as $u) {
+                    /** @var \App\Models\User $u */
                     $roles = $u->roles->pluck('name')->join('|');
                     fputcsv($handle, [
                         $u->id,
@@ -119,12 +126,12 @@ class BranchController extends Controller
                         $u->email,
                         $u->mobile,
                         $roles,
-                        $u->active ? 'Active' : 'Inactive',
+                        ($u->active ?? $u->is_active ?? false) ? 'Active' : 'Inactive',
                         optional($u->created_at)->toDateTimeString(),
                     ]);
                 }
             });
-            fclose($handle);
+            @fclose($handle);
         };
 
         return response()->streamDownload($callback, $filename, [
@@ -133,7 +140,7 @@ class BranchController extends Controller
         ]);
     }
 
-    public function update(Request $request, Branch $branch)
+    public function update(Request $request, Branch $branch): RedirectResponse
     {
         $this->authorize('update', $branch);
         $validated = $request->validate([
@@ -146,7 +153,7 @@ class BranchController extends Controller
         return redirect()->route('branches.index')->with('status', 'Branch updated.');
     }
 
-    public function destroy(Branch $branch)
+    public function destroy(Branch $branch): RedirectResponse
     {
         $this->authorize('delete', $branch);
         if ($branch->users()->count()) {
@@ -156,8 +163,9 @@ class BranchController extends Controller
         return redirect()->route('branches.index')->with('deleted', 'Branch deleted.');
     }
 
-    public function restore($id)
+    public function restore(int $id): RedirectResponse
     {
+        /** @var Branch $branch */
         $branch = Branch::withTrashed()->findOrFail($id);
         $this->authorize('restore', $branch);
         if (! $branch->trashed()) {

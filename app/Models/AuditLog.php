@@ -6,7 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\HasAuditFields;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
+/**
+ * @use \Illuminate\Database\Eloquent\Factories\HasFactory<\Database\Factories\AuditLogFactory>
+ */
 class AuditLog extends Model
 {
     use HasFactory, SoftDeletes, HasAuditFields;
@@ -36,29 +41,41 @@ class AuditLog extends Model
     /**
      * Get the user who performed the action.
      */
-    public function user()
+    // BelongsTo relation user
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
     /**
      * Get the auditable model.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\MorphTo<\Illuminate\Database\Eloquent\Model, $this>
      */
-    public function auditable()
+    public function auditable(): MorphTo
     {
         return $this->morphTo();
     }
 
     /**
      * Log an audit entry.
+     *
+     * @param string $action
+     * @param \Illuminate\Database\Eloquent\Model|null $auditable
+     * @param array<string,mixed> $oldValues
+     * @param array<string,mixed> $newValues
+     * @return self
      */
-    public static function log(string $action, $auditable, array $oldValues = [], array $newValues = []): self
+    public static function log(string $action, ?Model $auditable = null, array $oldValues = [], array $newValues = []): self
     {
         return self::create([
             'user_id' => auth()->id(),
             'action' => $action,
             'auditable_type' => $auditable ? get_class($auditable) : null,
-            'auditable_id' => $auditable?->id,
+            'auditable_id' => $auditable?->getKey(),
             'old_values' => $oldValues,
             'new_values' => $newValues,
             'ip_address' => request()->ip(),

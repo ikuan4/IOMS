@@ -6,7 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\HasAuditFields;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @use \Illuminate\Database\Eloquent\Factories\HasFactory<\Database\Factories\BranchFactory>
+ */
 class Branch extends Model
 {
     use HasFactory, SoftDeletes, HasAuditFields;
@@ -30,22 +35,38 @@ class Branch extends Model
         'restored_by' => 'integer',
     ];
 
-    public function creator()
+    // BelongsTo relation creator
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function creator() : BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
-    public function updater()
+    // BelongsTo relation updater
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function updater() : BelongsTo
     {
         return $this->belongsTo(User::class, 'updated_by');
     }
 
-    public function roles()
+    // HasMany relation roles
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Role, $this>
+     */
+    public function roles() : HasMany
     {
-        return $this->hasMany(Role::class);
+        return $this->hasMany(Role::class, 'branch_id');
     }
 
-    public function users()
+    // HasMany relation users
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\User, $this>
+     */
+    public function users() : HasMany
     {
         return $this->hasMany(User::class, 'branch_id');
     }

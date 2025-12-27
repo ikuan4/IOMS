@@ -99,9 +99,10 @@ class RoleController extends Controller
         // Get users by role if requested (AJAX) — return normalized JSON shape
         $roleId = $request->query('role_id');
         if ($roleId && $request->ajax()) {
+            /** @var Role|null $role */
             $role = Role::find($roleId);
             $mapped = [];
-            if ($role) {
+            if ($role instanceof Role) {
                 $this->authorize('view', $role);
 
                 // Users assigned via pivot (model_has_roles)
@@ -348,7 +349,7 @@ class RoleController extends Controller
     /**
      * Return JSON with count of active mapped users for the given role.
      */
-    public function mappedActiveUsers(Role $role)
+    public function mappedActiveUsers(Role $role): JsonResponse
     {
         $this->authorize('view', $role);
         $pivotUsersCount = $role->users()->where('active', true)->whereNull('users.deleted_at')->count();
@@ -370,8 +371,8 @@ class RoleController extends Controller
         $branches = Branch::orderBy('name')->get();
 
         // Determine selected branch: developer may choose via query, others default to their branch
-        if ($isDeveloper) {
-            $selectedBranchId = $request->query('branch_id') ?? ($branches->first()?->id ?? null);
+            if ($isDeveloper) {
+            $selectedBranchId = $request->query('branch_id') ?? $branches->first()?->id;
             $rolesForView = $selectedBranchId
                 ? Role::where('branch_id', $selectedBranchId)->orderBy('priority', 'asc')->get()
                 : collect([]);
@@ -389,33 +390,7 @@ class RoleController extends Controller
         return view('roles.hierarchy', compact('role', 'branches', 'selectedBranchId', 'rolesForView', 'isDeveloper', 'isHierarchyPage'));
     }
 
-    /**
-     * @param Collection<int, Role> $roles
-     * @return Collection<int, Role>
-     */
-    private function sortRolesByHierarchy(Collection $roles): Collection
-    {
-        // Hierarchy removed — fall back to ordering by priority then name
-        return $roles->sortBy(function ($r) {
-            return [$r->priority ?? 100, $r->name];
-        })->values();
-    }
-
-    /**
-     * @param Role $userRole
-     * @param Collection<int, Role> $allRoles
-     * @return int[]
-     */
-    private function getVisibleRoleTree(Role $userRole, Collection $allRoles): array
-    {
-        $visibleIds = [$userRole->id];
-        if (method_exists($userRole, 'getAllDescendantIds') && \Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
-            $descendants = $userRole->getAllDescendantIds()->toArray();
-            $descendants = array_filter($descendants, fn($id) => $id !== $userRole->id);
-            $visibleIds = array_merge($visibleIds, $descendants);
-        }
-        return array_unique($visibleIds);
-    }
+    // getVisibleRoleTree removed: hierarchy feature deprecated, logic inlined where needed.
 
     public function updatePriority(Request $request): RedirectResponse
     {
@@ -436,8 +411,9 @@ class RoleController extends Controller
             $priorities = $validated['priorities'] ?? [];
             $updatedCount = 0;
             foreach ($priorities as $roleId => $priority) {
+                /** @var Role|null $role */
                 $role = Role::find($roleId);
-                if (!$role) continue;
+                if (!($role instanceof Role)) continue;
                 $old = $role->priority ?? null;
                 $role->priority = (int)$priority;
                 $role->save();
@@ -450,8 +426,9 @@ class RoleController extends Controller
 
         $updatedCount = 0;
         foreach ($validated['parents'] as $roleId => $data) {
+            /** @var Role|null $role */
             $role = Role::find($roleId);
-            if (!$role) {
+            if (!($role instanceof Role)) {
                 continue;
             }
 
@@ -474,26 +451,14 @@ class RoleController extends Controller
 
             $validParentIds = [];
             foreach ($parentIds as $parentId) {
+                /** @var Role|null $parentRole */
                 $parentRole = Role::find($parentId);
-                if ($parentRole && !$this->wouldCreateCircularOrRedundant($roleId, $parentId)) {
+                if ($parentRole instanceof Role && !$this->wouldCreateCircularOrRedundant($roleId, $parentId)) {
                     $validParentIds[] = $parentId;
                 }
             }
 
             $oldParents = [];
-            if (method_exists($role, 'parents') && \Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
-                $oldParents = $role->parents()->pluck('id')->toArray();
-                $role->parents()->sync($validParentIds);
-
-                if ($oldParents !== $validParentIds) {
-                    AuditLog::log(
-                        'update_role_hierarchy',
-                        $role,
-                        ['parent_ids' => $oldParents],
-                        ['parent_ids' => $validParentIds]
-                    );
-                }
-            }
 
             $updatedCount++;
         }
@@ -503,43 +468,7 @@ class RoleController extends Controller
 
     private function wouldCreateCircularOrRedundant(int $roleId, int $parentId): bool
     {
-        if (!\Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
-            return false;
-        }
-        $role = Role::find($roleId);
-        $parent = Role::find($parentId);
-
-        if (!$role || !$parent) {
-            return false;
-        }
-
-        if ($roleId == $parentId) {
-            return true;
-        }
-
-        if (method_exists($role, 'isAncestorOf') && $role->isAncestorOf($parent)) {
-            return true;
-        }
-
-        $currentParents = [];
-        if (method_exists($role, 'parents') && \Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
-            $currentParents = $role->parents()->pluck('id')->toArray();
-        }
-
-        foreach ($currentParents as $currentParentId) {
-            if ($currentParentId == $parentId) {
-                continue;
-            }
-
-            $currentParent = Role::find($currentParentId);
-            if ($currentParent) {
-                $ancestorIds = $currentParent->getAllAncestorIds();
-                if ($ancestorIds->contains($parentId)) {
-                    return true;
-                }
-            }
-        }
-
+        // Hierarchy support removed; treat as no circularity by default.
         return false;
     }
 

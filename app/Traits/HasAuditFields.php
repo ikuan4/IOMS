@@ -3,6 +3,7 @@
 namespace App\Traits;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 
@@ -11,60 +12,89 @@ trait HasAuditFields
     /**
      * Boot the trait
      */
-    protected static function bootHasAuditFields()
+    protected static function bootHasAuditFields(): void
     {
         // Set created_by and updated_by on creating
         static::creating(function (Model $model) {
             if (Auth::check()) {
-                $model->created_by = Auth::id();
-                $model->updated_by = Auth::id();
+                $model->setAttribute('created_by', Auth::id());
+                $model->setAttribute('updated_by', Auth::id());
             }
         });
 
         // Set updated_by on updating
         static::updating(function (Model $model) {
             if (Auth::check()) {
-                $model->updated_by = Auth::id();
+                $model->setAttribute('updated_by', Auth::id());
             }
         });
 
         // Set deleted_by when soft deleting
         static::deleting(function (Model $model) {
-            if (Auth::check() && $model->getDeletedAtColumn() && !$model->forceDeleting) {
-                $model->{$model->getDeletedByColumn()} = Auth::id();
-                $model->saveQuietly(); // Save without triggering events again
+            if (!Auth::check()) {
+                return;
+            }
+
+            // Only attempt this when the model provides deleted column helpers
+            if (!method_exists($model, 'getDeletedAtColumn') || !method_exists($model, 'getDeletedByColumn')) {
+                return;
+            }
+
+            $deletedAtColumn = null;
+            if (method_exists($model, 'getDeletedAtColumn')) {
+                try {
+                    $deletedAtColumn = $model->getDeletedAtColumn();
+                } catch (\Throwable $__e) {
+                    $deletedAtColumn = null;
+                }
+            }
+
+            if ($deletedAtColumn) {
+                $forceDeleting = (bool) $model->getAttribute('forceDeleting');
+                if (!$forceDeleting) {
+                    $model->setAttribute($model->getDeletedByColumn(), (int) Auth::id());
+                    $model->saveQuietly(); // Save without triggering events again
+                }
             }
         });
     }
 
     /**
      * Get the user who created this record
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
      */
-    public function createdBy()
+    public function createdBy(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 
     /**
      * Get the user who last updated this record
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
      */
-    public function updatedBy()
+    public function updatedBy(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'updated_by');
     }
 
     /**
      * Get the user who deleted this record
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
      */
-    public function deletedBy()
+    public function deletedBy(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'deleted_by');
     }
 
     /**
      * Get the user who restored this record
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
      */
-    public function restoredBy()
+    public function restoredBy(): BelongsTo
     {
         return $this->belongsTo(\App\Models\User::class, 'restored_by');
     }
@@ -72,7 +102,7 @@ trait HasAuditFields
     /**
      * Get the deleted_by column name
      */
-    public function getDeletedByColumn()
+    public function getDeletedByColumn(): string
     {
         return 'deleted_by';
     }
@@ -80,19 +110,19 @@ trait HasAuditFields
     /**
      * Restore the model and set restored_by
      */
-    public function restoreWithUser()
+    public function restoreWithUser(): ?bool
     {
         if (Auth::check()) {
-            $this->restored_by = Auth::id();
+            $this->setAttribute('restored_by', (int) Auth::id());
 
             if (isset($this->name) && str_starts_with($this->name, 'Deleted ')) {
-                $this->name = substr($this->name, 8);
+                $this->setAttribute('name', substr($this->name, 8));
             }
 
             // set restored_at when column exists
             try {
                 if (Schema::hasColumn($this->getTable(), 'restored_at')) {
-                    $this->restored_at = now();
+                    $this->setAttribute('restored_at', now());
                 }
             } catch (\Throwable $__e) {
                 // ignore schema checks on broken environments
