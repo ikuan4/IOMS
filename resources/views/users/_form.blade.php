@@ -73,10 +73,10 @@
                 <option value="">-- Select Role --</option>
                 @foreach($roles as $role)
                     @php
-                        $rname = strtolower(trim($role->name ?? ''));
-                        $currentUserRole = strtolower(trim(optional(auth()->user()->role)->name ?? ''));
+                        $isProtectedRole = method_exists($role, 'isSuperAdmin') && $role->isSuperAdmin();
+                        $currentIsSuperAdmin = auth()->user() && method_exists(auth()->user(), 'isSuperAdmin') && auth()->user()->isSuperAdmin();
                     @endphp
-                    @if($rname === 'developer' && $currentUserRole !== 'developer')
+                    @if($isProtectedRole && !$currentIsSuperAdmin)
                         @continue
                     @endif
                     <option value="{{ $role->id }}" {{ old('role_id', $user->role_id) == $role->id ? 'selected' : '' }}>{{ $role->name }}</option>

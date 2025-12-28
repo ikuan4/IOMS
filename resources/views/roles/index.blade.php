@@ -256,11 +256,10 @@
             @forelse($roles as $role)
                 @php
                     // Hide the Developer role for non-developer and non-super-admin users
-                    $isDeveloperRole = strtolower(trim($role->name ?? '')) === 'developer' || strtolower(trim($role->slug ?? '')) === 'developer';
-                    $currentIsDeveloper = strtolower(trim($currentUser->role->name ?? '')) === 'developer';
+                    $isDeveloperRole = method_exists($role, 'isSuperAdmin') && $role->isSuperAdmin();
                     $currentIsSuperAdmin = $currentUser ? $currentUser->isSuperAdmin() : false;
                 @endphp
-                @if($isDeveloperRole && !$currentIsDeveloper && !$currentIsSuperAdmin)
+                @if($isDeveloperRole && !$currentIsSuperAdmin)
                     @continue
                 @endif
                 @php
@@ -279,7 +278,7 @@
                         <strong>{{ $role->name }}</strong>
                         <br>
                         <span style="font-size:13px; opacity:0.7;">{{ $role->slug }}</span>
-                        @if($role->deleted_at && ($currentUser && ($currentUser->isSuperAdmin() || $currentUser->role?->slug === 'admin')))
+                        @if($role->deleted_at && ($currentUser && ($currentUser->isSuperAdmin() || (method_exists($currentUser, 'isAdmin') && $currentUser->isAdmin()))))
                             <br>
                             <span style="font-size:12px; color:#ef4444; opacity:0.8;">
                                 <span data-feather="user-x" style="width:12px;height:12px;"></span>

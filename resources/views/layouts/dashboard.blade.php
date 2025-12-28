@@ -110,6 +110,8 @@
     </main>
 </div>
 
+@include('partials.confirmation-modal')
+
 <!-- Dashboard JS -->
 @vite(['resources/js/dashboard.js'])
 

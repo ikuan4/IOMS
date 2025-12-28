@@ -52,7 +52,12 @@
                 </a>
                 @endcan
                 @if((auth()->user()->isSuperAdmin() ) || (auth()->user()->hasPermission('roles.manage-priority') && \Illuminate\Support\Facades\Route::has('roles.hierarchy')))
-                <a href="{{ route('roles.hierarchy', request()->route('role') ?? \App\Models\Role::first()->id ?? 1) }}" class="{{ ($isHierarchyPage ?? false) ? 'active' : '' }}">
+                @php
+                    $hierarchyRole = request()->route('role');
+                    $hierarchyRoleId = $hierarchyRole instanceof \App\Models\Role ? $hierarchyRole->getKey() : $hierarchyRole;
+                    $hierarchyRoleId = $hierarchyRoleId ?: (\App\Models\Role::query()->value('id') ?? 1);
+                @endphp
+                <a href="{{ route('roles.hierarchy', $hierarchyRoleId) }}" class="{{ ($isHierarchyPage ?? false) ? 'active' : '' }}">
                     <span class="label">Role Hierarchy</span>
                 </a>
                 @endif

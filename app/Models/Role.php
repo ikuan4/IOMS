@@ -66,6 +66,12 @@ class Role extends SpatieRole
         'restored_at' => 'datetime',
     ];
 
+    public function getNameAttribute($value): ?string
+    {
+        $name = $value ?? ($this->attributes['role_name'] ?? null);
+        return is_string($name) ? $name : null;
+    }
+
     /**
      * Roles that are parents of this role (hierarchy pivot where this is child).
      */
@@ -103,6 +109,7 @@ class Role extends SpatieRole
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
+            ->wherePivot('model_type', User::class)
             ->withTimestamps();
     }
 
@@ -179,6 +186,23 @@ class Role extends SpatieRole
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
+    /**
+     * Accessor for `is_active` to ensure boolean return and
+     * support both `$role->is_active` and `$role->isActive()` usages.
+     */
+    public function getIsActiveAttribute($value): bool
+    {
+        return (bool) ($value ?? $this->attributes['is_active'] ?? false);
+    }
+
+    /**
+     * Helper method used in some views/compiled templates.
+     */
+    public function isActive(): bool
+    {
+        return (bool) ($this->is_active ?? false);
     }
     // Hierarchy helper methods removed.
 

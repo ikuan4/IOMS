@@ -133,8 +133,16 @@
                     </td>
                     <td style="padding:8px;">{{ $user->name }}</td>
                     <td style="padding:8px;">
-                        @if($user->role)
-                            <span style="background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:600;">{{ $user->role->name }}</span>
+                        @php
+                            $displayRole = null;
+                            if (method_exists($user, 'effectiveRole')) {
+                                $displayRole = $user->effectiveRole();
+                            } else {
+                                $displayRole = $user->role ?? null;
+                            }
+                        @endphp
+                        @if($displayRole)
+                            <span style="background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:600;">{{ $displayRole->name }}</span>
                         @else
                             <span class="muted">No Role</span>
                         @endif

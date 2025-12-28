@@ -120,7 +120,36 @@ class User extends Authenticatable
      */
     public function roles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsToMany(Role::class, 'model_has_roles', 'model_id', 'role_id');
+        return $this->belongsToMany(Role::class, 'model_has_roles', 'model_id', 'role_id')
+            ->wherePivot('model_type', self::class);
+    }
+
+    /**
+     * Resolve the user's effective role.
+     *
+     * This codebase supports both:
+     * - direct FK assignment (`users.role_id` => `roles.id`)
+     * - Spatie-style pivot assignment (`model_has_roles`)
+     */
+    public function effectiveRole(): ?Role
+    {
+        try {
+            if ($this->relationLoaded('role') && $this->getRelation('role')) {
+                return $this->getRelation('role');
+            }
+
+            if (!empty($this->role_id)) {
+                return $this->role()->first();
+            }
+
+            if ($this->relationLoaded('roles')) {
+                return $this->roles->first();
+            }
+
+            return $this->roles()->orderBy('id', 'asc')->first();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -128,13 +157,15 @@ class User extends Authenticatable
      */
     public function isSuperAdmin(): bool
     {
-        // Super Admin / Admin concepts removed. Treat Developer role as elevated user.
-        try {
-            $roleName = strtolower(trim($this->role->name ?? ''));
-            return $roleName === 'developer';
-        } catch (\Throwable $e) {
-            return false;
-        }
+        // Treat the protected Developer role as elevated user.
+        $role = $this->effectiveRole();
+        return $role ? $role->isSuperAdmin() : false;
+    }
+
+    public function isAdmin(): bool
+    {
+        $role = $this->effectiveRole();
+        return $role ? $role->isAdmin() : false;
     }
 
     /**
@@ -149,7 +180,8 @@ class User extends Authenticatable
             return true;
         }
 
-        if (!$this->role) {
+        $role = $this->effectiveRole();
+        if (!$role) {
             return false;
         }
 
@@ -173,7 +205,7 @@ class User extends Authenticatable
                 $slug = $aliases[$slug];
             }
 
-            if ($this->role->permissions()->where('slug', $slug)->exists()) {
+            if ($role->permissions()->where('slug', $slug)->exists()) {
                 return true;
             }
         }
@@ -190,11 +222,12 @@ class User extends Authenticatable
             return Permission::all();
         }
 
-        if (!$this->role) {
+        $role = $this->effectiveRole();
+        if (!$role) {
             return new Collection();
         }
 
-        return $this->role->permissions()->get();
+        return $role->permissions()->get();
     }
 
     /**
@@ -214,13 +247,14 @@ class User extends Authenticatable
         }
 
         // Non-developers: return roles within the same branch or the user's own role
-        if (!$this->role) {
+        $effectiveRole = $this->effectiveRole();
+        if (!$effectiveRole) {
             return collect([]);
         }
 
         $roles = Role::where(function ($q) {
             $q->where('branch_id', $this->branch_id)
-              ->orWhere('id', $this->role_id);
+                            ->orWhere('id', $this->effectiveRole()?->id);
         })->where('is_active', true)
           ->whereNull('deleted_at')
           ->orderBy('priority', 'asc')
@@ -228,9 +262,7 @@ class User extends Authenticatable
 
         // Remove Developer role for non-developer users
         $roles = $roles->reject(function ($r) {
-            $isDeveloperRole = strtolower(trim($r->name ?? '')) === 'developer';
-            $currentIsDeveloper = strtolower(trim($this->role->name ?? '')) === 'developer';
-            return $isDeveloperRole && !$currentIsDeveloper;
+            return $r->isSuperAdmin() && !$this->isSuperAdmin();
         })->values();
 
         return $roles;

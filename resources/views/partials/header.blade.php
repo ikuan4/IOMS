@@ -112,7 +112,7 @@
                         id="logout-form"
                     >
                         @csrf
-                        <button type="button" class="dropdown-item" role="menuitem" onclick="showConfirm('Logout', 'Are you sure you want to log out?', function(){ document.getElementById('logout-form').submit(); });">
+                        <button type="button" class="dropdown-item" role="menuitem" style="color:#ef4444;" onclick="event.preventDefault(); showConfirmModal({ type: 'delete', title: 'Logout', subtitle: '', message: 'Are you sure you want to log out?', confirmText: 'Logout', form: document.getElementById('logout-form') });">
                             <span data-feather="log-out"></span>
                             <span>Logout</span>
                         </button>
