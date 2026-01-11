@@ -77,6 +77,51 @@
         </div>
         @endif
         @endauth
+
+        {{-- Contract Management module (collapsible group) --}}
+        @auth
+        @php
+            $canViewContractTypes = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contract-types.view');
+            $canViewContracts = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.view');
+            $canViewRecipients = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('notification-recipients.view');
+            $showContractMgmt = $canViewContractTypes || $canViewContracts || $canViewRecipients;
+            $isContractModule = request()->routeIs('contract-types.*') || request()->routeIs('contracts.*') || request()->routeIs('notification-recipients.*');
+        @endphp
+
+        @if($showContractMgmt)
+        <div class="nav-group {{ $isContractModule ? 'open' : '' }}" id="nav-contract-mgmt">
+            <button
+                type="button"
+                class="nav-toggle"
+                id="nav-contract-mgmt-toggle"
+                aria-expanded="{{ $isContractModule ? 'true' : 'false' }}"
+                aria-controls="nav-contract-mgmt-submenu"
+            >
+                <span data-feather="file-text"></span>
+                <span class="label">Contract Management</span>
+                <span class="nav-toggle-caret" aria-hidden="true" data-feather="chevron-down"></span>
+            </button>
+
+            <div class="nav-submenu" id="nav-contract-mgmt-submenu">
+                @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contract-types.view'))
+                <a href="{{ route('contract-types.index') }}" class="{{ request()->routeIs('contract-types.*') ? 'active' : '' }}">
+                    <span class="label">Contract Types</span>
+                </a>
+                @endif
+                @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.view'))
+                <a href="{{ route('contracts.index') }}" class="{{ request()->routeIs('contracts.*') ? 'active' : '' }}">
+                    <span class="label">Contracts</span>
+                </a>
+                @endif
+                @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('notification-recipients.view'))
+                <a href="{{ route('notification-recipients.index') }}" class="{{ request()->routeIs('notification-recipients.*') ? 'active' : '' }}">
+                    <span class="label">Notification Recipients</span>
+                </a>
+                @endif
+            </div>
+        </div>
+        @endif
+        @endauth
     </nav>
 
     <div class="sidebar-footer muted">

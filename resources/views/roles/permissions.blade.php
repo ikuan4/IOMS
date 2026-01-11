@@ -138,7 +138,7 @@
                                             margin-left:8px;
                                             text-transform:uppercase;
                                             letter-spacing:0.5px;
-                                        \">Coming Soon</span>
+                                        \"></span>
                                     @endif
                                 </h5>
                             </div>

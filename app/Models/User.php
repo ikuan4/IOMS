@@ -152,7 +152,13 @@ class User extends Authenticatable
      */
     public function isSuperAdmin(): bool
     {
-        // Developer user has no role and no branch
+        // Check if user has Developer role
+        $role = $this->effectiveRole();
+        if ($role && strtolower(trim($role->slug ?? '')) === 'developer') {
+            return true;
+        }
+
+        // Fallback: Developer user with no role and no branch (legacy)
         return $this->role_id === null && $this->branch_id === null;
     }
 

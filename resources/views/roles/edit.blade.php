@@ -137,9 +137,9 @@
                                 box-shadow:0 2px 4px rgba(0,0,0,0.2);
                             "></div>
                         </div>
-                        <input type="hidden" name="is_active" value="0">
                         <input
                             type="checkbox"
+                            id="is_active_checkbox"
                             name="is_active"
                             value="1"
                             {{ old('is_active', $role->is_active) ? 'checked' : '' }}
@@ -203,8 +203,8 @@
         event.stopPropagation();
         event.preventDefault();
 
-        // Skip the hidden input and get the checkbox
-        const checkbox = toggleSwitch.nextElementSibling.nextElementSibling;
+        // Get the checkbox (now it's the next sibling)
+        const checkbox = toggleSwitch.nextElementSibling;
         checkbox.checked = !checkbox.checked;
 
         const knob = toggleSwitch.querySelector('.toggle-knob');
@@ -221,9 +221,25 @@
 <script>
     async function checkRoleDeactivate(form, roleId, roleName) {
         try {
-            // Determine if the form is attempting to deactivate the role (checkbox unchecked)
-            const checkbox = form.querySelector('input[name="is_active"]');
+            // Before checking anything, ensure unchecked checkbox is handled
+            const checkbox = form.querySelector('#is_active_checkbox');
+            if (checkbox && !checkbox.checked) {
+                // Add hidden field to ensure 0 is sent for unchecked
+                let hiddenField = form.querySelector('input[name="is_active"][type="hidden"]');
+                if (!hiddenField) {
+                    hiddenField = document.createElement('input');
+                    hiddenField.type = 'hidden';
+                    hiddenField.name = 'is_active';
+                    hiddenField.value = '0';
+                    form.appendChild(hiddenField);
+                }
+                // Remove the checkbox so it doesn't send value="1"
+                checkbox.remove();
+            }
+
+            // Determine if the form is attempting to deactivate the role
             const wantsActive = checkbox && checkbox.checked;
+
             // If still active or no change, just submit
             if (wantsActive) {
                 form.submit();

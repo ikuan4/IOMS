@@ -102,3 +102,36 @@ Route::middleware('auth')->group(function () {
     Route::post('branches/{branch}/restore', [App\Http\Controllers\BranchController::class, 'restore'])->name('branches.restore');
 });
 
+// Contract Management (requires auth)
+Route::middleware('auth')->group(function () {
+    // Contract Types
+    Route::resource('contract-types', App\Http\Controllers\ContractTypeController::class);
+    Route::post('contract-types/{id}/restore', [App\Http\Controllers\ContractTypeController::class, 'restore'])
+        ->name('contract-types.restore');
+    
+    // Notification Recipients
+    Route::resource('notification-recipients', App\Http\Controllers\NotificationRecipientController::class);
+    Route::post('notification-recipients/{id}/restore', [App\Http\Controllers\NotificationRecipientController::class, 'restore'])
+        ->name('notification-recipients.restore');
+    
+    // Contracts
+    Route::resource('contracts', App\Http\Controllers\ContractController::class);
+    Route::post('contracts/{id}/restore', [App\Http\Controllers\ContractController::class, 'restore'])
+        ->name('contracts.restore');
+    Route::get('contracts/{contract}/export', [App\Http\Controllers\ContractController::class, 'exportExcel'])
+        ->name('contracts.export');
+    Route::post('contracts/{contract}/test-notification', [App\Http\Controllers\ContractController::class, 'sendTestNotification'])
+        ->name('contracts.test-notification');
+    
+    // Contract Versions
+    Route::get('contracts/{contract}/versions/create', [App\Http\Controllers\ContractController::class, 'createVersion'])
+        ->name('contracts.versions.create');
+    Route::post('contracts/{contract}/versions', [App\Http\Controllers\ContractController::class, 'storeVersion'])
+        ->name('contracts.versions.store');
+    Route::get('contracts/{contract}/versions/{version}/edit', [App\Http\Controllers\ContractController::class, 'editVersion'])
+        ->name('contracts.versions.edit');
+    Route::put('contracts/{contract}/versions/{version}', [App\Http\Controllers\ContractController::class, 'updateVersion'])
+        ->name('contracts.versions.update');
+});
+
+

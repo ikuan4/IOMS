@@ -152,7 +152,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name'      => ['required', 'string', 'max:255'],
             'mobile'    => ['required', 'string', 'max:50', 'unique:users,mobile'],
-            'email'     => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->whereNotNull('email')],
+            'email'     => ['required', 'email', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8', 'confirmed'],
             'avatar'    => ['nullable', 'image', 'max:2048'],
             'role_id'   => ['required', 'exists:roles,id'],
@@ -242,7 +242,7 @@ class UserController extends Controller
         $data = $request->validate([
             'name'     => ['required', 'string', 'max:255'],
             'mobile'   => ['required', Rule::unique('users')->ignore($user->id)],
-            'email'    => ['nullable', 'email', Rule::unique('users', 'email')->whereNotNull('email')->ignore($user->id)],
+            'email'    => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', 'min:8'],
             'role_id'  => ['required', 'exists:roles,id'],
             'branch_id'=> ['nullable', 'exists:branches,id'],

@@ -1,0 +1,25 @@
+PART 1 OF CONTRACTCONTROLLER - This is reference for building the actual controller
+
+The complete ContractController needs these methods:
+1. index() - List contracts with status filtering and branch filtering
+2. create() - Show create form with branch-specific contract types and recipients
+3. store() - Create contract with version, files, reminders, recipients
+4. show() - Display contract details with versions
+5. edit() - Edit contract form
+6. update() - Update contract and latest version
+7. destroy() - Soft delete contract
+8. restore() - Restore deleted contract
+9. exportExcel() - Export to Excel
+10. createVersion() - Create new version form
+11. storeVersion() - Store new version
+12. editVersion() - Edit version form
+13. updateVersion() - Update version
+14. downloadVersionAttachments() - Download files
+15. sendTestNotification() - Test email
+
+All methods need:
+- Branch filtering for non-super-admin users
+- Contract number format: CT-{BRANCH_ID}/{TYPE3}/{YYYY}/{id}
+- Timezone conversion UTC<->IST
+- File storage in branches/{branch_id}/contracts/
+- Branch-level file deduplication

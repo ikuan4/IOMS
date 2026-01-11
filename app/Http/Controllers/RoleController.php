@@ -144,6 +144,7 @@ class RoleController extends Controller
             'name' => 'required|string|max:255|unique:roles,name',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
+            'branch_id' => 'nullable|integer|exists:branches,id',
         ]);
 
         $baseSlug = Str::slug($validated['name']);
@@ -158,6 +159,15 @@ class RoleController extends Controller
         $validated['slug'] = $slug;
         $validated['guard_name'] = 'web';
         $validated['is_active'] = $request->boolean('is_active');
+
+        // Set branch_id: Developer can choose, others get their own branch
+        $currentUser = Auth::user();
+        assert($currentUser instanceof User);
+        if ($currentUser->isSuperAdmin() && $request->filled('branch_id')) {
+            $validated['branch_id'] = $request->input('branch_id');
+        } else {
+            $validated['branch_id'] = $currentUser->branch_id ?? null;
+        }
 
         $role = Role::create($validated);
 
@@ -208,7 +218,16 @@ class RoleController extends Controller
             'branch_id' => 'nullable|integer|exists:branches,id',
         ]);
 
-        $validated['is_active'] = $request->boolean('is_active');
+        // Handle is_active properly - checkbox sends 1 if checked, hidden field sends 0 if unchecked
+        // When checkbox is checked, both values are sent, so we check if '1' is in the array
+        $isActiveValue = $request->input('is_active');
+        if (is_array($isActiveValue)) {
+            // Multiple values sent, check if '1' is present
+            $validated['is_active'] = in_array('1', $isActiveValue) || in_array(1, $isActiveValue);
+        } else {
+            // Single value sent
+            $validated['is_active'] = (bool) $isActiveValue;
+        }
 
         $baseSlug = Str::slug($validated['name']);
         $slug = $baseSlug;
