@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Facades\Schema;
 use App\Models\Branch;
 use App\Models\User;
 use App\Models\Permission;
@@ -20,20 +21,30 @@ use App\Models\Permission;
  *
  * @property int $id
  * @property string $name
+ * @property string|null $role_name
+ * @property bool $active
  * @property string|null $slug
  * @property string|null $description
  * @property bool $is_active
  * @property int|null $priority
  * @property int|null $branch_id
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ * @property int|null $deleted_by
+ * @property int|null $restored_by
+ * @property \Illuminate\Support\Carbon|null $restored_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property string $guard_name
  * @property EloquentCollection|Permission[] $permissions
  * @property EloquentCollection|User[] $users
  * @property-read \App\Models\User|null $deletedBy
-*/
-/**
+ * @property-read \App\Models\User|null $createdBy
+ * @property-read \App\Models\User|null $updatedBy
+ * @property-read \App\Models\User|null $restoredBy
+ * @property-read \App\Models\Branch|null $branch
  * @use \Illuminate\Database\Eloquent\Factories\HasFactory<\Database\Factories\RoleFactory>
- */
-/**
- * @property int $id
  */
 class Role extends SpatieRole
 {
@@ -66,7 +77,7 @@ class Role extends SpatieRole
         'restored_at' => 'datetime',
     ];
 
-    public function getNameAttribute($value): ?string
+    public function getNameAttribute(?string $value): ?string
     {
         $name = $value ?? ($this->attributes['role_name'] ?? null);
         return is_string($name) ? $name : null;
@@ -159,28 +170,19 @@ class Role extends SpatieRole
     }
 
     /**
-     * Count users assigned to this role.
-     * Handles both pivot-based assignments (model_has_roles) and direct role_id on users table.
+     * Count users assigned to this role via direct role_id FK.
      */
     public function userCount(): int
     {
-        // Get IDs assigned via pivot relation (if loaded, use it to avoid N+1)
-        if ($this->relationLoaded('users')) {
-            $pivotIds = $this->users->pluck('id')->toArray();
-        } else {
-            $pivotIds = $this->users()->pluck('id')->toArray();
+        try {
+            return User::where('role_id', $this->id)->count();
+        } catch (\Throwable $e) {
+            return 0;
         }
-
-        // Get IDs assigned via users.role_id foreign key
-        $directIds = User::where('role_id', $this->id)->pluck('id')->toArray();
-
-        return count(array_unique(array_merge($pivotIds, $directIds)));
     }
 
     /**
      * Branch this role belongs to (optional)
-     */
-    /**
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Branch, $this>
      */
     public function branch(): BelongsTo
@@ -192,7 +194,7 @@ class Role extends SpatieRole
      * Accessor for `is_active` to ensure boolean return and
      * support both `$role->is_active` and `$role->isActive()` usages.
      */
-    public function getIsActiveAttribute($value): bool
+    public function getIsActiveAttribute(?bool $value): bool
     {
         return (bool) ($value ?? $this->attributes['is_active'] ?? false);
     }

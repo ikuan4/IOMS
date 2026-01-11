@@ -28,7 +28,7 @@ class BranchPolicy
     public function update(User $user, Branch $branch): bool
     {
         if ($user->isSuperAdmin()) return true;
-        return $user->hasPermission('branches.update');
+        return $user->hasPermission('branches.edit');
     }
 
     public function delete(User $user, Branch $branch): bool

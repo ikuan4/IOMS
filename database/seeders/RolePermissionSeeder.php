@@ -16,18 +16,36 @@ class RolePermissionSeeder extends Seeder
     public function run(): void
     {
         $permissions = [
+            // Dashboard
+            ['name' => 'View Dashboard', 'slug' => 'dashboard.view', 'group' => 'dashboard', 'guard_name' => 'web'],
+
+            // Users
             ['name' => 'View Users', 'slug' => 'users.view', 'group' => 'users', 'guard_name' => 'web'],
             ['name' => 'Create New User', 'slug' => 'users.create', 'group' => 'users', 'guard_name' => 'web'],
             ['name' => 'Edit User Details', 'slug' => 'users.edit', 'group' => 'users', 'guard_name' => 'web'],
             ['name' => 'Delete Users', 'slug' => 'users.delete', 'group' => 'users', 'guard_name' => 'web'],
+            ['name' => 'Restore Users', 'slug' => 'users.restore', 'group' => 'users', 'guard_name' => 'web'],
             ['name' => 'Assign Roles to Users', 'slug' => 'users.assign-roles', 'group' => 'users', 'guard_name' => 'web'],
 
+            // Roles
             ['name' => 'View Roles', 'slug' => 'roles.view', 'group' => 'roles', 'guard_name' => 'web'],
             ['name' => 'Create New Role', 'slug' => 'roles.create', 'group' => 'roles', 'guard_name' => 'web'],
             ['name' => 'Edit Role Details', 'slug' => 'roles.edit', 'group' => 'roles', 'guard_name' => 'web'],
             ['name' => 'Delete Roles', 'slug' => 'roles.delete', 'group' => 'roles', 'guard_name' => 'web'],
+            ['name' => 'Restore Roles', 'slug' => 'roles.restore', 'group' => 'roles', 'guard_name' => 'web'],
+            ['name' => 'Manage Role Hierarchy', 'slug' => 'roles.manage-priority', 'group' => 'roles', 'guard_name' => 'web'],
 
+            // Branches
+            ['name' => 'View Branches', 'slug' => 'branches.view', 'group' => 'branches', 'guard_name' => 'web'],
+            ['name' => 'Create Branch', 'slug' => 'branches.create', 'group' => 'branches', 'guard_name' => 'web'],
+            ['name' => 'Edit Branch', 'slug' => 'branches.edit', 'group' => 'branches', 'guard_name' => 'web'],
+            ['name' => 'Delete Branch', 'slug' => 'branches.delete', 'group' => 'branches', 'guard_name' => 'web'],
+            ['name' => 'Restore Branch', 'slug' => 'branches.restore', 'group' => 'branches', 'guard_name' => 'web'],
+            ['name' => 'Export Branch Data', 'slug' => 'branches.export', 'group' => 'branches', 'guard_name' => 'web'],
+
+            // Permissions (Role Permission Management)
             ['name' => 'View Permissions', 'slug' => 'permissions.view', 'group' => 'permissions', 'guard_name' => 'web'],
+            ['name' => 'Manage Role Permissions', 'slug' => 'permissions.manage', 'group' => 'permissions', 'guard_name' => 'web'],
             ['name' => 'Create New Permission', 'slug' => 'permissions.create', 'group' => 'permissions', 'guard_name' => 'web'],
             ['name' => 'Edit Permission Details', 'slug' => 'permissions.edit', 'group' => 'permissions', 'guard_name' => 'web'],
             ['name' => 'Delete Permissions', 'slug' => 'permissions.delete', 'group' => 'permissions', 'guard_name' => 'web'],

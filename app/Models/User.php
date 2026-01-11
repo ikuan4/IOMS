@@ -37,7 +37,7 @@ use App\Models\Branch;
  */
 class User extends Authenticatable
 {
-    /** @use HasFactory<\\Database\\Factories\\UserFactory> */
+    /** @use \Illuminate\Database\Eloquent\Factories\HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable, SoftDeletes, HasAuditFields;
 
     /**
@@ -127,9 +127,8 @@ class User extends Authenticatable
     /**
      * Resolve the user's effective role.
      *
-     * This codebase supports both:
-     * - direct FK assignment (`users.role_id` => `roles.id`)
-     * - Spatie-style pivot assignment (`model_has_roles`)
+     * Uses only direct FK assignment (`users.role_id` => `roles.id`).
+     * Pivot table (model_has_roles) is deprecated for User-Role assignments.
      */
     public function effectiveRole(): ?Role
     {
@@ -142,11 +141,7 @@ class User extends Authenticatable
                 return $this->role()->first();
             }
 
-            if ($this->relationLoaded('roles')) {
-                return $this->roles->first();
-            }
-
-            return $this->roles()->orderBy('id', 'asc')->first();
+            return null;
         } catch (\Throwable) {
             return null;
         }
@@ -157,15 +152,8 @@ class User extends Authenticatable
      */
     public function isSuperAdmin(): bool
     {
-        // Treat the protected Developer role as elevated user.
-        $role = $this->effectiveRole();
-        return $role ? $role->isSuperAdmin() : false;
-    }
-
-    public function isAdmin(): bool
-    {
-        $role = $this->effectiveRole();
-        return $role ? $role->isAdmin() : false;
+        // Developer user has no role and no branch
+        return $this->role_id === null && $this->branch_id === null;
     }
 
     /**
@@ -232,6 +220,7 @@ class User extends Authenticatable
 
     /**
      * Get manageable roles for this user (descendants of user's role).
+     * Enforces priority hierarchy: users can only assign roles with equal or lower priority.
      *
      * @return \Illuminate\Support\Collection<int, \App\Models\Role>
      */
@@ -252,17 +241,23 @@ class User extends Authenticatable
             return collect([]);
         }
 
-        $roles = Role::where(function ($q) {
-            $q->where('branch_id', $this->branch_id)
-                            ->orWhere('id', $this->effectiveRole()?->id);
-        })->where('is_active', true)
+        $myPriority = $effectiveRole->priority ?? 999;
+
+        $roles = Role::where('branch_id', $this->branch_id)
+          ->where('is_active', true)
           ->whereNull('deleted_at')
           ->orderBy('priority', 'asc')
           ->get();
 
-        // Remove Developer role for non-developer users
-        $roles = $roles->reject(function ($r) {
-            return $r->isSuperAdmin() && !$this->isSuperAdmin();
+        // Remove Developer role for non-developer users and enforce priority
+        $roles = $roles->reject(function ($r) use ($myPriority) {
+            // Reject super admin roles for non-super admins
+            if ($r->isSuperAdmin() && !$this->isSuperAdmin()) {
+                return true;
+            }
+            // Reject roles with higher priority (lower number = higher priority)
+            $rolePriority = $r->priority ?? 999;
+            return $rolePriority < $myPriority;
         })->values();
 
         return $roles;
@@ -303,14 +298,16 @@ class User extends Authenticatable
     public function getManageableUsers(): \Illuminate\Support\Collection
     {
         if ($this->isSuperAdmin()) {
-            return User::withTrashed()->where('id', '!=', $this->id)->with('role')->get();
+            return User::with(['role', 'branch'])->where('id', '!=', $this->id)->get();
         }
 
-        // Non-developers: return users in the same branch
-        return User::withTrashed()
+        // Non-developers: return users in the same branch (branch must exist and be active)
+        return User::with(['role', 'branch'])
             ->where('branch_id', $this->branch_id)
             ->where('id', '!=', $this->id)
-            ->with('role')
+            ->whereHas('branch', function($q) {
+                $q->whereNull('deleted_at');
+            })
             ->get();
     }
 

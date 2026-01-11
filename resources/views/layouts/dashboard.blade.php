@@ -63,15 +63,115 @@
 @endif
 
 <style>
-    .notification-toast { position: fixed; top: 22px; right: 22px; display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.06); opacity:0; transform:translateY(-6px); transition:opacity 300ms ease, transform 300ms ease; z-index:2000; min-width:280px; max-width:420px; }
-    .notification-toast.show { opacity:1; transform:translateY(0); }
-    .notification-icon { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:8px; background:rgba(255,255,255,0.12); flex:0 0 36px; }
-    .notification-content { flex:1 1 auto; }
-    .notification-message { font-weight:700; font-size:14px; color:#0f172a; }
-    .notification-close { background:transparent;border:none;cursor:pointer;color:inherit;padding:6px;display:flex;align-items:center;justify-content:center;border-radius:6px; }
-    .notification-success { background: linear-gradient(180deg,#ecfdf5,#bbf7d0); border:1px solid #10b981; }
-    .notification-error, .notification-deleted { background: linear-gradient(180deg,#ffeaea,#fecaca); border:1px solid #ef4444; }
-    .notification-deleted .notification-message { color:#7f1d1d; }
+    .notification-toast {
+        position: fixed;
+        top: 22px;
+        right: 22px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        opacity: 0;
+        transform: translateY(-6px);
+        transition: opacity 300ms ease, transform 300ms ease;
+        z-index: 2000;
+        min-width: 280px;
+        max-width: 420px;
+    }
+    .notification-toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .notification-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        background: rgba(255,255,255,0.15);
+        flex: 0 0 36px;
+    }
+    .notification-content {
+        flex: 1 1 auto;
+    }
+    .notification-message {
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--text, #0f172a);
+    }
+    .notification-close {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: inherit;
+        padding: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+    }
+    .notification-close:hover {
+        opacity: 1;
+    }
+
+    /* Light theme toasts */
+    .notification-success {
+        background: linear-gradient(180deg, #ecfdf5, #bbf7d0);
+        border: 1px solid #10b981;
+    }
+    .notification-success .notification-message {
+        color: #065f46;
+    }
+    .notification-success .notification-icon {
+        color: #10b981;
+    }
+
+    .notification-error,
+    .notification-deleted {
+        background: linear-gradient(180deg, #ffeaea, #fecaca);
+        border: 1px solid #ef4444;
+    }
+    .notification-error .notification-message,
+    .notification-deleted .notification-message {
+        color: #7f1d1d;
+    }
+    .notification-error .notification-icon,
+    .notification-deleted .notification-icon {
+        color: #ef4444;
+    }
+
+    /* Dark theme toasts */
+    [data-theme="dark"] .notification-success {
+        background: linear-gradient(180deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.1));
+        border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    [data-theme="dark"] .notification-success .notification-message {
+        color: #6ee7b7;
+    }
+    [data-theme="dark"] .notification-success .notification-icon {
+        background: rgba(16, 185, 129, 0.2);
+        color: #6ee7b7;
+    }
+
+    [data-theme="dark"] .notification-error,
+    [data-theme="dark"] .notification-deleted {
+        background: linear-gradient(180deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+        border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    [data-theme="dark"] .notification-error .notification-message,
+    [data-theme="dark"] .notification-deleted .notification-message {
+        color: #fca5a5;
+    }
+    [data-theme="dark"] .notification-error .notification-icon,
+    [data-theme="dark"] .notification-deleted .notification-icon {
+        background: rgba(239, 68, 68, 0.2);
+        color: #fca5a5;
+    }
 </style>
 
 <script>

@@ -89,6 +89,10 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::resource('users', UserController::class);
     Route::post('users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
+
+    // Developer profile routes (self-update without role validation)
+    Route::get('/profile', [UserController::class, 'editProfile'])->name('profile.edit');
+    Route::put('/profile', [UserController::class, 'updateProfile'])->name('profile.update');
 });
 
 // Branch management (requires auth)

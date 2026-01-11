@@ -22,14 +22,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Allow users with the "Developer" role to bypass authorization checks in local/dev environment
+        // Allow developer user (no role, no branch) to bypass authorization checks
         Gate::before(function ($user, $ability) {
             try {
-                if ($user && isset($user->role) && $user->role && strtolower($user->role->name) === 'developer') {
+                // Developer user has null role_id and null branch_id
+                if ($user && $user->role_id === null && $user->branch_id === null) {
                     return true;
                 }
             } catch (\Throwable $e) {
-                // If something goes wrong reading role, don't block normal gate resolution
+                // If something goes wrong, don't block normal gate resolution
             }
             return null;
         });

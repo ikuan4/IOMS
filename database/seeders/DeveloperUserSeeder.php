@@ -13,7 +13,7 @@ class DeveloperUserSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
-            // Ensure Developer role exists (use DB to be schema-safe) and get its id
+            // Ensure Developer role exists for other purposes
             $roleData = ['name' => 'Developer'];
             if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'slug')) {
                 $roleData['slug'] = 'developer';
@@ -22,9 +22,8 @@ class DeveloperUserSeeder extends Seeder
                 ['name' => 'Developer'],
                 array_merge($roleData, ['updated_at' => now(), 'created_at' => now()])
             );
-            $roleId = \Illuminate\Support\Facades\DB::table('roles')->where('name', 'Developer')->value('id');
 
-            // Create or update default user
+            // Create or update developer user with null role_id and branch_id
             $user = User::withTrashed()->where('email', 'ikuan4@gmail.com')->first();
 
             if ($user) {
@@ -37,7 +36,7 @@ class DeveloperUserSeeder extends Seeder
                     'password' => 'password@123',
                     'mobile' => $user->mobile ?? '0000000000',
                     'active' => true,
-                    'role_id' => $roleId,
+                    'role_id' => null,
                     'branch_id' => null,
                 ]);
             } else {
@@ -47,7 +46,7 @@ class DeveloperUserSeeder extends Seeder
                     'password' => 'password@123',
                     'mobile' => '0000000000',
                     'active' => true,
-                    'role_id' => $roleId,
+                    'role_id' => null,
                     'branch_id' => null,
                 ]);
             }

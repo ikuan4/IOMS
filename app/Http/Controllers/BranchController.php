@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\AuditLog;
+use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -48,6 +50,9 @@ class BranchController extends Controller
             'name' => $validated['name'],
             'created_by' => Auth::id(),
         ]);
+
+        AuditLog::log('create_branch', $branch, $branch->toArray());
+
         return redirect()->route('branches.index')->with('status', 'Branch created.');
     }
 
@@ -118,13 +123,20 @@ class BranchController extends Controller
             fputcsv($handle, ['ID','Name','Email','Mobile','Roles','Status','Created At']);
             $usersQuery->chunk(200, function($users) use ($handle) {
                 foreach ($users as $u) {
-                    /** @var \App\Models\User $u */
+                    /** 
+                     * @var \App\Models\User $u 
+                     * @property string $name
+                     * @property string|null $email
+                     * @property string $mobile
+                     * @property bool $active
+                     * @property \Illuminate\Support\Carbon|null $created_at
+                     */
                     $roles = $u->roles->pluck('name')->join('|');
                     fputcsv($handle, [
-                        $u->id,
-                        $u->name,
-                        $u->email,
-                        $u->mobile,
+                        $u->getKey(),
+                        $u->name ?? '',
+                        $u->email ?? '',
+                        $u->mobile ?? '',
                         $roles,
                         ($u->active ?? $u->is_active ?? false) ? 'Active' : 'Inactive',
                         optional($u->created_at)->toDateTimeString(),
@@ -146,19 +158,35 @@ class BranchController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:branches,name,' . $branch->getKey(),
         ]);
+
+        $oldValues = $branch->toArray();
+
         $branch->update([
             'name' => $validated['name'],
             'updated_by' => Auth::id(),
         ]);
+
+        AuditLog::log('update_branch', $branch, $oldValues, $branch->fresh()->toArray());
+
         return redirect()->route('branches.index')->with('status', 'Branch updated.');
     }
 
     public function destroy(Branch $branch): RedirectResponse
     {
         $this->authorize('delete', $branch);
+
         if ($branch->users()->count()) {
-            return redirect()->route('branches.index')->with('error', 'Cannot delete branch with users.');
+            return redirect()->route('branches.index')
+                ->with('error', 'Cannot delete branch with active users.');
         }
+
+        if ($branch->roles()->count()) {
+            return redirect()->route('branches.index')
+                ->with('error', 'Cannot delete branch with assigned roles.');
+        }
+
+        AuditLog::log('delete_branch', $branch, $branch->toArray());
+
         $branch->delete();
         return redirect()->route('branches.index')->with('deleted', 'Branch deleted.');
     }
@@ -168,9 +196,15 @@ class BranchController extends Controller
         /** @var Branch $branch */
         $branch = Branch::withTrashed()->findOrFail($id);
         $this->authorize('restore', $branch);
+
         if (! $branch->trashed()) {
             return redirect()->route('branches.index')->with('status', 'Branch is not deleted.');
         }
+
+        // Check if roles need attention
+        $trashedRoles = Role::onlyTrashed()
+            ->where('branch_id', $branch->getKey())
+            ->count();
 
         if (method_exists($branch, 'restoreWithUser')) {
             try { $branch->restoreWithUser(); } catch (\Throwable $__e) { $branch->restore(); }
@@ -185,6 +219,13 @@ class BranchController extends Controller
             }
         }
 
-        return redirect()->route('branches.index')->with('status', 'Branch restored.');
+        AuditLog::log('restore_branch', $branch, [], $branch->fresh()->toArray());
+
+        $message = 'Branch restored.';
+        if ($trashedRoles > 0) {
+            $message .= " Note: {$trashedRoles} role(s) in this branch are still deleted.";
+        }
+
+        return redirect()->route('branches.index')->with('status', $message);
     }
 }

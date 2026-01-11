@@ -7,10 +7,12 @@
     </div>
 
     <nav class="nav" aria-label="Main navigation">
+        @if(auth()->check() && (auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('dashboard.view')))
         <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
             <span data-feather="home"></span>
             <span class="label">Dashboard</span>
         </a>
+        @endif
 
         @php
             $isRoleModule = request()->routeIs('roles.*');

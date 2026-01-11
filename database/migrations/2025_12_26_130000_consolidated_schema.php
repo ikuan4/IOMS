@@ -17,7 +17,7 @@ return new class extends Migration
                 $table->string('guard_name')->default('web');
                 $table->text('description')->nullable();
                 $table->boolean('is_active')->default(true);
-                $table->integer('priority')->default(100);
+                $table->integer('priority')->default(1);
                 $table->unsignedBigInteger('branch_id')->nullable();
                 $table->timestamps();
                 $table->softDeletes();
@@ -29,7 +29,7 @@ return new class extends Migration
                     $table->string('guard_name')->default('web')->after('slug');
                 }
                 if (!Schema::hasColumn('roles', 'priority')) {
-                    $table->integer('priority')->default(100)->after('is_active');
+                    $table->integer('priority')->default(1)->after('is_active');
                 }
                 if (!Schema::hasColumn('roles', 'is_active')) {
                     $table->boolean('is_active')->default(true)->after('description');

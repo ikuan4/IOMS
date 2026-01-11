@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Schema;
 use Illuminate\Contracts\View\View as ContractView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -30,15 +31,24 @@ class RoleController extends Controller
         assert($currentUser instanceof User);
 
         // Build base query (without status/search) for counts and scoping
-        $baseQuery = Role::with(['users', 'deletedBy', 'branch']);
+        $baseQuery = Role::with([
+            'deletedBy' => function($q) { $q->withTrashed(); },
+            'branch' => function($q) { $q->withTrashed(); }
+        ]);
         if ($currentUser->isSuperAdmin()) {
             $baseQuery->withTrashed();
         } else {
+            // Non-developer users: restrict to own branch only
+            $baseQuery->where('branch_id', $currentUser->branch_id);
+
             $manageableRoleIds = $currentUser->getManageableRoles()->pluck('id')->push($currentUser->role_id);
 
             $userDeletedRoleIds = AuditLog::where('user_id', $currentUser->id)
                 ->where('action', 'delete_role')
                 ->where('auditable_type', Role::class)
+                ->where('auditable_id', 'IN', function($query) use ($currentUser) {
+                    $query->select('id')->from('roles')->where('branch_id', $currentUser->branch_id);
+                })
                 ->pluck('auditable_id');
 
             $baseQuery->where(function ($q) use ($manageableRoleIds, $userDeletedRoleIds) {
@@ -105,14 +115,10 @@ class RoleController extends Controller
             if ($role instanceof Role) {
                 $this->authorize('view', $role);
 
-                // Users assigned via pivot (model_has_roles)
-                $pivotUsers = $role->users()->with('role')->get();
-
                 // Users assigned via direct foreign key on users.role_id
-                $directUsers = User::where('role_id', $role->id)->with('role')->get();
-
-                // Merge and deduplicate by id
-                $users = $pivotUsers->concat($directUsers)->unique('id')->values();
+                $users = User::where('role_id', $role->id)
+                    ->with(['role' => function($q) { $q->withTrashed(); }])
+                    ->get();
 
                 $mapped = $users->map(function ($u) {
                     $roleObj = $u->role ? ['id' => $u->role->id, 'name' => $u->role->name, 'slug' => $u->role->slug] : null;
@@ -120,8 +126,8 @@ class RoleController extends Controller
                         'id' => $u->id,
                         'name' => $u->name,
                         'email' => $u->email,
-                        'active' => (bool) ($u->active ?? $u->is_active ?? false),
-                        'custom_roles' => $roleObj ? [$roleObj] : [],
+                        'active' => (bool) ($u->active ?? false),
+                        'role' => $roleObj,
                     ];
                 })->values();
             }
@@ -229,10 +235,11 @@ class RoleController extends Controller
             }
 
             $deactivateFlag = $request->boolean('deactivate_mapped_users');
-            // Count active mapped users
-            $pivotUsers = $role->users()->where('active', true)->whereNull('users.deleted_at')->get();
-            $directUsers = User::where('role_id', $role->id)->where('active', true)->whereNull('deleted_at')->get();
-            $users = $pivotUsers->concat($directUsers)->unique('id');
+            // Count active mapped users (only direct role_id assignment)
+            $users = User::where('role_id', $role->id)
+                ->where('active', true)
+                ->whereNull('deleted_at')
+                ->get();
 
             if ($users->count() > 0 && !$deactivateFlag) {
                 // Ask for confirmation if not provided; do not persist changes yet
@@ -290,16 +297,24 @@ class RoleController extends Controller
                 ->with('error', 'You cannot delete your own role.');
         }
 
+        // Check if role has assigned users
+        $userCount = User::where('role_id', $role->id)->count();
+        if ($userCount > 0) {
+            return redirect()->route('roles.index')
+                ->with('error', "Cannot delete role '{$role->name}' because it is assigned to {$userCount} user(s). Please reassign or remove users first.");
+        }
+
 
 
         // If confirmation provided, soft-delete active mapped users first
         if ($request->boolean('soft_delete_mapped_users')) {
             try {
-                $currentUser = Auth::user();
-                // Gather active mapped users (pivot + direct) and soft-delete them
-                $pivotUsers = $role->users()->where('active', true)->whereNull('users.deleted_at')->get();
-                $directUsers = User::where('role_id', $role->id)->where('active', true)->whereNull('deleted_at')->get();
-                $users = $pivotUsers->concat($directUsers)->unique('id');
+                // Gather active mapped users (only direct role_id)
+                $users = User::where('role_id', $role->id)
+                    ->where('active', true)
+                    ->whereNull('deleted_at')
+                    ->get();
+
                 foreach ($users as $u) {
                     try {
                         $u->delete();
@@ -352,9 +367,13 @@ class RoleController extends Controller
     public function mappedActiveUsers(Role $role): JsonResponse
     {
         $this->authorize('view', $role);
-        $pivotUsersCount = $role->users()->where('active', true)->whereNull('users.deleted_at')->count();
-        $directUsersCount = User::where('role_id', $role->id)->where('active', true)->whereNull('deleted_at')->count();
-        return response()->json(['count' => ($pivotUsersCount + $directUsersCount)]);
+
+        $usersCount = User::where('role_id', $role->id)
+            ->where('active', true)
+            ->whereNull('deleted_at')
+            ->count();
+
+        return response()->json(['count' => $usersCount]);
     }
 
     public function managePriority(Request $request, Role $role): ContractView
@@ -400,6 +419,12 @@ class RoleController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        // Log the request data for debugging
+        \Log::info('updatePriority called', [
+            'all_data' => $request->all(),
+            'priorities_param' => $request->input('priorities'),
+        ]);
+
         $validated = $request->validate([
             'parents' => 'nullable|array',
             'priorities' => 'nullable|array',
@@ -407,16 +432,26 @@ class RoleController extends Controller
         ]);
 
         // If the legacy role_hierarchies table is gone, treat this as a priority update
-        if (!\Illuminate\Support\Facades\Schema::hasTable('role_hierarchies')) {
+        if (!Schema::hasTable('role_hierarchies')) {
             $priorities = $validated['priorities'] ?? [];
             $updatedCount = 0;
+
+            \Log::info('Processing priorities', ['priorities' => $priorities, 'count' => count($priorities)]);
+
             foreach ($priorities as $roleId => $priority) {
                 /** @var Role|null $role */
                 $role = Role::find($roleId);
                 if (!($role instanceof Role)) continue;
+
+                // Validate branch: non-developer users can only update roles in their branch
+                if (!$currentUser->isSuperAdmin() && $role->branch_id !== $currentUser->branch_id) {
+                    continue;
+                }
+
                 $old = $role->priority ?? null;
                 $role->priority = (int)$priority;
                 $role->save();
+                \Log::info("Updated role {$roleId}", ['old' => $old, 'new' => $role->priority]);
                 if ($old !== $role->priority) $updatedCount++;
             }
 

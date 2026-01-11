@@ -50,7 +50,8 @@ trait HasAuditFields
             }
 
             if ($deletedAtColumn) {
-                $forceDeleting = (bool) $model->getAttribute('forceDeleting');
+                // Check if this is a force delete operation
+                $forceDeleting = method_exists($model, 'isForceDeleting') ? $model->isForceDeleting() : false;
                 if (!$forceDeleting) {
                     $model->setAttribute($model->getDeletedByColumn(), (int) Auth::id());
                     $model->saveQuietly(); // Save without triggering events again

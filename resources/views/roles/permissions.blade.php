@@ -68,7 +68,36 @@
             </div>
 
             <div style="padding:16px;">
-                @foreach($permissions as $group => $perms)
+                @php
+                    // Reorder modules: existing modules first, then future modules
+                    $existingModules = ['dashboard', 'users', 'roles', 'branches', 'permissions'];
+                    $futureModules = ['contract-types', 'contracts', 'notifications'];
+
+                    $orderedPermissions = collect();
+
+                    // Add existing modules first
+                    foreach($existingModules as $moduleName) {
+                        if($permissions->has($moduleName)) {
+                            $orderedPermissions->put($moduleName, $permissions->get($moduleName));
+                        }
+                    }
+
+                    // Add future modules
+                    foreach($futureModules as $moduleName) {
+                        if($permissions->has($moduleName)) {
+                            $orderedPermissions->put($moduleName, $permissions->get($moduleName));
+                        }
+                    }
+
+                    // Add any remaining modules not in either list
+                    foreach($permissions as $group => $perms) {
+                        if(!$orderedPermissions->has($group)) {
+                            $orderedPermissions->put($group, $perms);
+                        }
+                    }
+                @endphp
+
+                @foreach($orderedPermissions as $group => $perms)
                     <div class="permission-group" style="margin-bottom:24px;">
                         {{-- Module Header --}}
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #3b82f6;">
@@ -81,17 +110,36 @@
                                 <h5 style="margin:0;font-size:15px;font-weight:600;color:#3b82f6;">
                                     @php
                                         $iconMap = [
+                                            'dashboard' => 'home',
                                             'users' => 'users',
                                             'roles' => 'shield',
+                                            'branches' => 'git-branch',
                                             'permissions' => 'key',
                                             'contract-types' => 'list',
                                             'contracts' => 'file-text',
                                             'notifications' => 'bell',
                                         ];
                                         $icon = $iconMap[$group] ?? 'folder';
+
+                                        // Define which modules are not yet implemented
+                                        $futureModules = ['contract-types', 'contracts', 'notifications'];
+                                        $isFutureModule = in_array($group, $futureModules);
                                     @endphp
                                     <span data-feather="{{ $icon }}" style="width:18px;height:18px;"></span>
                                     {{ ucwords(str_replace('-', ' ', $group)) }}
+                                    @if($isFutureModule)
+                                        <span style=\"
+                                            font-size:10px;
+                                            font-weight:700;
+                                            color:#f59e0b;
+                                            background:rgba(245, 158, 11, 0.1);
+                                            padding:2px 8px;
+                                            border-radius:12px;
+                                            margin-left:8px;
+                                            text-transform:uppercase;
+                                            letter-spacing:0.5px;
+                                        \">Coming Soon</span>
+                                    @endif
                                 </h5>
                             </div>
                             <label class="toggle-switch" style="user-select:none;" onclick="event.stopPropagation();">

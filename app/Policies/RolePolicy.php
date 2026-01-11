@@ -25,6 +25,11 @@ class RolePolicy
 
     public function update(User $user, Role $role): bool
     {
+        // Protect Developer role (ID 1) - only Developer role users can edit it
+        if ($role->id === 1 && !$user->isSuperAdmin()) {
+            return false;
+        }
+
         if ($role->isSuperAdmin()) {
             return false;
         }
@@ -35,6 +40,11 @@ class RolePolicy
 
     public function delete(User $user, Role $role): bool
     {
+        // Protect Developer role (ID 1) - cannot be deleted
+        if ($role->id === 1) {
+            return false;
+        }
+
         if ($role->isSuperAdmin()) {
             return false;
         }
@@ -87,7 +97,20 @@ class RolePolicy
 
     public function restore(User $user, Role $role): bool
     {
-        return $user->hasPermission('roles.delete');
+        if (!$user->hasPermission('roles.restore')) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Check branch match for non-developer users
+        if ($role->branch_id !== $user->branch_id) {
+            return false;
+        }
+
+        return true;
     }
 
     public function forceDelete(User $user, Role $role): bool
