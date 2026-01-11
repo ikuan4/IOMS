@@ -15,7 +15,20 @@ class RolePolicy
 
     public function view(User $user, Role $role): bool
     {
-        return $user->hasPermission('roles.view');
+        if (!$user->hasPermission('roles.view')) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Priority hierarchy: user can only view roles with priority >= their own
+        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $rolePriority = $role->priority ?? 999;
+
+        // Allow viewing roles at same level or lower privilege (higher number)
+        return $rolePriority >= $userPriority;
     }
 
     public function create(User $user): bool
@@ -34,8 +47,23 @@ class RolePolicy
             return false;
         }
 
-        return $user->hasPermission('roles.edit') &&
-            ($user->isSuperAdmin() || $user->canManageRole($role));
+        if (!$user->hasPermission('roles.edit')) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Priority hierarchy: user can only edit roles with priority > their own (lower privilege)
+        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $rolePriority = $role->priority ?? 999;
+
+        if ($rolePriority <= $userPriority) {
+            return false;
+        }
+
+        return $user->canManageRole($role);
     }
 
     public function delete(User $user, Role $role): bool
@@ -57,8 +85,23 @@ class RolePolicy
             return false;
         }
 
-        return $user->hasPermission('roles.delete') &&
-            ($user->isSuperAdmin() || $user->canManageRole($role));
+        if (!$user->hasPermission('roles.delete')) {
+            return false;
+        }
+
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Priority hierarchy: user can only delete roles with priority > their own
+        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $rolePriority = $role->priority ?? 999;
+
+        if ($rolePriority <= $userPriority) {
+            return false;
+        }
+
+        return $user->canManageRole($role);
     }
 
     public function managePermissions(User $user, Role $role): bool
@@ -107,6 +150,14 @@ class RolePolicy
 
         // Check branch match for non-developer users
         if ($role->branch_id !== $user->branch_id) {
+            return false;
+        }
+
+        // Priority hierarchy: user can only restore roles with priority > their own
+        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $rolePriority = $role->priority ?? 999;
+
+        if ($rolePriority <= $userPriority) {
             return false;
         }
 

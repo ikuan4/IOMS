@@ -267,8 +267,8 @@
                     $hideOwnRole = $currentUser && method_exists($currentUser, 'hasPermission') && $currentUser->hasPermission('roles.edit') && $currentUser->role_id === $role->id;
                 @endphp
                 @if(!$hideOwnRole)
-                <tr class="role-table-row"
-                    style="border-bottom:1px solid #f3f4f6; height:62px; cursor:pointer; {{ request('role_id') == $role->id ? 'background:#f0fdf4;' : '' }}"
+                <tr class="role-table-row {{ request('role_id') == $role->id ? 'role-selected' : '' }}"
+                    style="border-bottom:1px solid #f3f4f6; height:62px; cursor:pointer;"
                     data-role-id="{{ $role->id }}"
                     data-name="{{ strtolower($role->name) }}"
                     data-slug="{{ strtolower($role->slug) }}"
@@ -593,7 +593,7 @@
                         <input type="hidden" name="{{ $k }}" value="{{ $v }}" />
                     @endforeach
                     <label for="role_per_page" style="font-size:13px;color:var(--muted,#6b7280);">Show per Page:</label>
-                    <select name="per_page" id="role_per_page" onchange="document.getElementById('rolePerPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid #e5e7eb;background:var(--card);">
+                    <select name="per_page" id="role_per_page" onchange="document.getElementById('rolePerPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid var(--muted,#e5e7eb);background:var(--card);color:var(--text,inherit);">
                         @foreach([5,10,15,20,30] as $opt)
                             <option value="{{ $opt }}" {{ $currentPerPage == $opt ? 'selected' : '' }}>{{ $opt }}</option>
                         @endforeach
@@ -754,9 +754,14 @@
         }
 
         .role-selected {
-            background: #f0fdf4 !important;
+            background: var(--accent-bg, #f0fdf4) !important;
             transition: box-shadow 0.15s ease-in-out;
             box-shadow: 0 2px 6px rgba(34,197,94,0.08);
+        }
+
+        [data-theme="dark"] .role-selected {
+            background: rgba(34, 197, 94, 0.15) !important;
+            box-shadow: 0 2px 6px rgba(34,197,94,0.25);
         }
 
         /* Mobile responsiveness */

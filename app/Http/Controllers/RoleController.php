@@ -59,7 +59,7 @@ class RoleController extends Controller
             });
         }
 
-        // compute counts for status cards
+        // compute counts for status cards using the scoped baseQuery
         $statusCounts = [
             'all' => (clone $baseQuery)->count(),
             'active' => (clone $baseQuery)->whereNull('deleted_at')->where('is_active', true)->count(),
@@ -397,12 +397,16 @@ class RoleController extends Controller
                 : collect([]);
         } else {
             $selectedBranchId = $currentUser->branch_id;
-            $rolesForView = Role::where(function ($q) use ($currentUser) {
-                $q->where('id', $currentUser->role_id)
-                  ->orWhereHas('users', function ($uq) use ($currentUser) {
-                      $uq->where('id', $currentUser->id);
-                  });
-            })->orderBy('priority', 'asc')->get();
+
+            // Get user's priority (lower number = higher privilege)
+            $userPriority = $currentUser->effectiveRole()?->priority ?? 999;
+
+            // User can only see roles with priority > their own (lower privilege/higher number)
+            // This excludes their own role and any roles with higher privilege
+            $rolesForView = Role::where('branch_id', $currentUser->branch_id)
+                ->where('priority', '>', $userPriority)
+                ->orderBy('priority', 'asc')
+                ->get();
         }
 
         $isHierarchyPage = true;
@@ -436,7 +440,10 @@ class RoleController extends Controller
             $priorities = $validated['priorities'] ?? [];
             $updatedCount = 0;
 
-            \Log::info('Processing priorities', ['priorities' => $priorities, 'count' => count($priorities)]);
+            // Get current user's priority for validation
+            $userPriority = $currentUser->effectiveRole()?->priority ?? 999;
+
+            \Log::info('Processing priorities', ['priorities' => $priorities, 'count' => count($priorities), 'userPriority' => $userPriority]);
 
             foreach ($priorities as $roleId => $priority) {
                 /** @var Role|null $role */
@@ -445,6 +452,16 @@ class RoleController extends Controller
 
                 // Validate branch: non-developer users can only update roles in their branch
                 if (!$currentUser->isSuperAdmin() && $role->branch_id !== $currentUser->branch_id) {
+                    continue;
+                }
+
+                // Non-superadmin users can only assign priorities > their own (lower privilege)
+                if (!$currentUser->isSuperAdmin() && (int)$priority <= $userPriority) {
+                    \Log::warning("User attempted to assign invalid priority", [
+                        'role_id' => $roleId,
+                        'attempted_priority' => $priority,
+                        'user_priority' => $userPriority
+                    ]);
                     continue;
                 }
 

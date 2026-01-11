@@ -131,7 +131,7 @@
                         <input type="hidden" name="{{ $k }}" value="{{ $v }}" />
                     @endforeach
                     <label for="branch_per_page" style="font-size:13px;color:var(--muted,#6b7280);">Show per Page:</label>
-                    <select name="per_page" id="branch_per_page" onchange="document.getElementById('branchPerPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid #e5e7eb;background:var(--card);">
+                    <select name="per_page" id="branch_per_page" onchange="document.getElementById('branchPerPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid var(--muted,#e5e7eb);background:var(--card);color:var(--text,inherit);">
                         @foreach([5,10,15,20,30] as $opt)
                             <option value="{{ $opt }}" {{ $currentPerPage == $opt ? 'selected' : '' }}>{{ $opt }}</option>
                         @endforeach

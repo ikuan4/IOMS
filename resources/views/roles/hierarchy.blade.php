@@ -47,7 +47,12 @@
             </div>
 
             @if($rolesForView && $rolesForView->count())
-                <div id="rolesContainer" class="roles-hierarchy-container">
+                @php
+                    // Get current user's priority for client-side validation
+                    $currentUserPriority = auth()->user()->effectiveRole()?->priority ?? 999;
+                    $isDev = auth()->user()->isSuperAdmin();
+                @endphp
+                <div id="rolesContainer" class="roles-hierarchy-container" data-user-priority="{{ $isDev ? 0 : $currentUserPriority }}">
                     @foreach($rolesForView as $index => $r)
                         <div class="role-row" data-role-id="{{ $r->id }}" data-priority="{{ $r->priority ?? 1 }}">
                             <div class="role-content">
@@ -58,10 +63,10 @@
                                 <input type="number"
                                        class="priority-input"
                                        value="{{ $r->priority ?? 1 }}"
-                                       min="1"
+                                       min="{{ $isDev ? 1 : $currentUserPriority + 1 }}"
                                        max="100"
                                        data-role-id="{{ $r->id }}"
-                                       title="1 = Highest, 100 = Lowest">
+                                       title="You can only assign priorities {{ $isDev ? '1-100' : ($currentUserPriority + 1) . '-100 (lower privilege than your role)' }}">
                             </div>
                         </div>
                     @endforeach
@@ -185,10 +190,17 @@
                 const input = e.target;
                 let newPriority = parseInt(input.value) || 1;
 
-                // Clamp value between 1 and 100
-                if (newPriority < 1) {
-                    newPriority = 1;
-                    input.value = 1;
+                // Get user's minimum allowed priority from container
+                const userMinPriority = parseInt(container.getAttribute('data-user-priority')) || 0;
+                const minAllowed = userMinPriority > 0 ? userMinPriority + 1 : 1;
+
+                // Clamp value between minAllowed and 100
+                if (newPriority < minAllowed) {
+                    newPriority = minAllowed;
+                    input.value = minAllowed;
+                    // Show warning
+                    input.style.borderColor = '#ef4444';
+                    setTimeout(() => { input.style.borderColor = ''; }, 1500);
                 } else if (newPriority > 100) {
                     newPriority = 100;
                     input.value = 100;

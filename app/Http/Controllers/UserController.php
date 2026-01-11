@@ -100,11 +100,24 @@ class UserController extends Controller
 
         $users = $query->paginate($perPage)->withQueryString();
 
+        // Build base query for counts with same hierarchy restrictions
+        $baseCountQuery = User::query();
+        if (!$currentUser->isSuperAdmin()) {
+            $myPriority = $currentUser->effectiveRole()?->priority ?? 999;
+            $baseCountQuery->where('branch_id', $currentUser->branch_id)
+                ->where(function($q) use ($myPriority) {
+                    $q->whereHas('role', function($roleQuery) use ($myPriority) {
+                        $roleQuery->where('priority', '>', $myPriority);
+                    })
+                    ->orWhereNull('role_id');
+                });
+        }
+
         $statusCounts = [
-            'all'         => User::count(),
-            'active'      => User::whereNull('deleted_at')->where('active', true)->count(),
-            'deactivated' => User::whereNull('deleted_at')->where('active', false)->count(),
-            'deleted'     => User::onlyTrashed()->count(),
+            'all'         => (clone $baseCountQuery)->count(),
+            'active'      => (clone $baseCountQuery)->whereNull('deleted_at')->where('active', true)->count(),
+            'deactivated' => (clone $baseCountQuery)->whereNull('deleted_at')->where('active', false)->count(),
+            'deleted'     => (clone $baseCountQuery)->onlyTrashed()->count(),
         ];
 
         return view('users.index', compact('users', 'search', 'status', 'statusCounts'));

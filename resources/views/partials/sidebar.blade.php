@@ -24,6 +24,15 @@
 
         {{-- User Management module (collapsible group) --}}
         @auth
+        @php
+            $canViewUsers = auth()->user()->can('viewAny', \App\Models\User::class);
+            $canViewRoles = auth()->user()->can('viewAny', \App\Models\Role::class);
+            $canViewBranches = auth()->user()->can('viewAny', \App\Models\Branch::class);
+            $canManageHierarchy = (auth()->user()->isSuperAdmin()) || (auth()->user()->hasPermission('roles.manage-priority') && \Illuminate\Support\Facades\Route::has('roles.hierarchy'));
+            $showUserMgmt = $canViewUsers || $canViewRoles || $canViewBranches || $canManageHierarchy;
+        @endphp
+
+        @if($showUserMgmt)
         <div class="nav-group {{ $isUserMgmtModule ? 'open' : '' }}" id="nav-user-mgmt">
             <button
                 type="button"
@@ -66,6 +75,7 @@
                 {{-- Legacy hierarchy link removed --}}
             </div>
         </div>
+        @endif
         @endauth
     </nav>
 

@@ -16,8 +16,17 @@ class BranchController extends Controller
     public function index(Request $request): View
     {
         $this->authorize('viewAny', Branch::class);
+
+        $currentUser = Auth::user();
+
         // include trashed so deleted branches can be restored from the index
         $query = Branch::withTrashed();
+
+        // Non-superadmin users can only see their own branch
+        if ($currentUser && !$currentUser->isSuperAdmin()) {
+            $query->where('id', $currentUser->branch_id);
+        }
+
         if ($request->has('search') && $request->search) {
             $s = $request->search;
             $query->where('name', 'like', "%{$s}%");
@@ -123,8 +132,8 @@ class BranchController extends Controller
             fputcsv($handle, ['ID','Name','Email','Mobile','Roles','Status','Created At']);
             $usersQuery->chunk(200, function($users) use ($handle) {
                 foreach ($users as $u) {
-                    /** 
-                     * @var \App\Models\User $u 
+                    /**
+                     * @var \App\Models\User $u
                      * @property string $name
                      * @property string|null $email
                      * @property string $mobile
