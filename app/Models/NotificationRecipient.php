@@ -54,4 +54,44 @@ class NotificationRecipient extends Model
             'contract_notification_recipient'
         )->withTimestamps();
     }
+
+    /**
+     * Get the user who created this notification recipient
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get the user who last updated this notification recipient
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /**
+     * Get the user who deleted this notification recipient
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function deleter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
+    }
+
+    /**
+     * Get the user who restored this notification recipient
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function restorer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'restored_by');
+    }
 }

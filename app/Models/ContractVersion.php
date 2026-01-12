@@ -10,6 +10,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Traits\HasAuditFields;
 
+/**
+ * @property int $id
+ * @property int $contract_id
+ * @property int $version_number
+ * @property string|null $description
+ * @property \Illuminate\Support\Carbon $start_date
+ * @property \Illuminate\Support\Carbon $end_date
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ * @property int|null $deleted_by
+ * @property int|null $restored_by
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property \Illuminate\Support\Carbon|null $restored_at
+ * @property-read Contract|null $contract
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, ContractVersionFile> $files
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, StoredFile> $storedFiles
+ */
 class ContractVersion extends Model
 {
     use HasFactory, SoftDeletes, HasAuditFields;

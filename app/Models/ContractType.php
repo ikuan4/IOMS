@@ -52,6 +52,46 @@ class ContractType extends Model
     }
 
     /**
+     * Get the user who created this contract type
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get the user who last updated this contract type
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /**
+     * Get the user who deleted this contract type
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function deleter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
+    }
+
+    /**
+     * Get the user who restored this contract type
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function restorer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'restored_by');
+    }
+
+    /**
      * Generate unique 3-char code from name
      * Handles duplicates by appending numbers
      */
@@ -60,7 +100,7 @@ class ContractType extends Model
         // Remove spaces and get first 3 chars
         $base = strtoupper(preg_replace('/\s+/', '', $name));
         $base = mb_substr($base, 0, 3);
-        
+
         // Pad if less than 3 chars
         if (mb_strlen($base) < 3) {
             $base = str_pad($base, 3, 'X');
@@ -69,7 +109,7 @@ class ContractType extends Model
         // Check if code exists in this branch
         $query = static::where('branch_id', $branchId)
             ->where('code', $base);
-            
+
         if ($excludeId) {
             $query->where('id', '!=', $excludeId);
         }
@@ -81,10 +121,10 @@ class ContractType extends Model
         // Generate alternative codes
         for ($i = 2; $i <= 99; $i++) {
             $alternative = mb_substr($base, 0, 2) . $i;
-            
+
             $query = static::where('branch_id', $branchId)
                 ->where('code', $alternative);
-                
+
             if ($excludeId) {
                 $query->where('id', '!=', $excludeId);
             }
@@ -97,10 +137,10 @@ class ContractType extends Model
         // Fallback to random if all numeric variants taken
         do {
             $random = mb_substr($base, 0, 1) . rand(10, 99);
-            
+
             $query = static::where('branch_id', $branchId)
                 ->where('code', $random);
-                
+
             if ($excludeId) {
                 $query->where('id', '!=', $excludeId);
             }

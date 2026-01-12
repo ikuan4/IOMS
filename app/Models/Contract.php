@@ -12,6 +12,32 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Traits\HasAuditFields;
 
+/**
+ * @property int $id
+ * @property int $branch_id
+ * @property int $contract_type_id
+ * @property string $contract_number
+ * @property string $contract_with
+ * @property int $grace_period_days
+ * @property bool $is_active
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ * @property int|null $deleted_by
+ * @property int|null $restored_by
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property \Illuminate\Support\Carbon|null $restored_at
+ * @property-read string $status
+ * @property-read Branch|null $branch
+ * @property-read ContractType|null $contractType
+ * @property-read ContractVersion|null $latestVersion
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, ContractVersion> $versions
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, ContractReminder> $reminders
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, NotificationRecipient> $notificationRecipients
+ * @property-read User|null $creator
+ * @property-read User|null $updater
+ */
 class Contract extends Model
 {
     use HasFactory, SoftDeletes, HasAuditFields;
@@ -101,13 +127,37 @@ class Contract extends Model
     }
 
     /**
-     * Computed status attribute (not stored in DB)
-     * 
-     * Status precedence:
-     * 1) Inactive  (is_active = false)
-     * 2) Expired   (now > end_date)
-     * 3) Expiring Soon (within grace_period_days of end_date)
-     * 4) Pending   (now < start_date)
+     * Get the user who created this contract
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * Get the user who last updated this contract
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\User, $this>
+     */
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Computed status attribute (not stored in DB)
+     |--------------------------------------------------------------------------
+     |
+     | Status precedence:
+     | 1) Inactive  (is_active = false)
+     | 2) Expired   (now > end_date)
+     | 3) Expiring Soon (within grace_period_days of end_date)
+     | 4) Pending   (now < start_date)
+     | 5) Ongoing   (otherwise)
+     |
      * 5) Ongoing   (otherwise)
      */
     public function getStatusAttribute(): string

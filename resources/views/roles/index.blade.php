@@ -449,12 +449,13 @@
                                             <span data-feather="trash-2"></span>
                                         </button>
                                     </form>
-                                    @if(\Illuminate\Support\Facades\Gate::allows('view', $role))
-                                        <a href="{{ route('roles.show', $role->id) }}" title="View role" style="background:#f8fafc;color:#0f172a;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-left:6px;text-decoration:none;"><span data-feather="eye"></span></a>
-                                    @endif
                                 @else
                                     {{-- Placeholder to maintain spacing for delete icon position (increased by 55%) --}}
                                     <div style="display:inline-block; width:48px; height:36px; margin-right:9px;"></div>
+                                @endif
+
+                                @if(\Illuminate\Support\Facades\Gate::allows('view', $role))
+                                    <a href="{{ route('roles.show', $role->id) }}" title="View role" style="background:#f8fafc;color:#0f172a;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-left:6px;text-decoration:none;"><span data-feather="eye"></span></a>
                                 @endif
                             @endif
                         @else
@@ -553,34 +554,45 @@
                 const data = await res.json();
                 const count = parseInt(data.count || 0, 10);
                 if (count <= 0) {
-                    // no mapped active users — submit immediately
-                    form.submit();
+                    // no mapped active users — show normal delete confirmation
+                    showConfirmModal({
+                        type: 'delete',
+                        title: 'Delete Role',
+                        subtitle: `Are you sure you want to delete "${roleName}"?`,
+                        message: 'This action will soft delete the role. You can restore it later from the deleted roles section.',
+                        confirmText: 'Delete Role',
+                        form: form
+                    });
                     return;
                 }
 
-                // create hidden input to signal server to soft-delete mapped users on confirm
-                let input = form.querySelector('input[name="soft_delete_mapped_users"]');
-                if (!input) {
-                    input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'soft_delete_mapped_users';
-                    form.appendChild(input);
-                }
-                input.value = '1';
-
-                // show modal with customized message
+                // Users are assigned - show informative modal that prevents deletion
                 showConfirmModal({
-                    type: 'delete',
-                    title: 'Confirm Deletion',
-                    subtitle: '',
-                    message: `Role "${roleName}" is assigned to ${count} active user${count===1? '' : 's'}. Confirm deletion? This will also soft-delete those active users.`,
-                    confirmText: 'Delete Role',
-                    form: form
+                    type: 'warning',
+                    title: 'Cannot Delete Role',
+                    subtitle: `Role "${roleName}" has ${count} active user${count===1? '' : 's'} assigned`,
+                    message: `This role cannot be deleted because it is currently assigned to ${count} active user${count===1? '' : 's'}.
+
+To delete this role, you must first:
+• Reassign the user${count===1? '' : 's'} to a different role, or
+• Delete the user${count===1? '' : 's'} from the User Management module
+
+You can view the assigned users by clicking on the role name in the table above.`,
+                    confirmText: 'OK, Got It',
+                    form: null, // No form submission
+                    cancelOnly: true
                 });
             } catch (e) {
                 console.error(e);
-                // fallback: submit the form
-                form.submit();
+                // fallback: show basic confirmation
+                showConfirmModal({
+                    type: 'delete',
+                    title: 'Delete Role',
+                    subtitle: `Are you sure you want to delete "${roleName}"?`,
+                    message: 'This action will soft delete the role.',
+                    confirmText: 'Delete Role',
+                    form: form
+                });
             }
         }
     </script>

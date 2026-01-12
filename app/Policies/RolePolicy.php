@@ -81,16 +81,14 @@ class RolePolicy
             return false;
         }
 
-        if ($role->users()->count() > 0) {
-            return false;
+        // Super admins can attempt to delete any non-protected role
+        // (actual deletion will be blocked by controller if users are assigned)
+        if ($user->isSuperAdmin()) {
+            return true;
         }
 
         if (!$user->hasPermission('roles.delete')) {
             return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
         }
 
         // Priority hierarchy: user can only delete roles with priority > their own

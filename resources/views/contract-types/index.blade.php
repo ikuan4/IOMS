@@ -97,14 +97,12 @@
             <input type="text" name="search" id="contractTypeSearchInput" value="{{ $search }}" placeholder="Search by name, code, or description..." oninput="debouncedSearch()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
         </form>
 
-        @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('create', \App\Models\ContractType::class))
+        @if(auth()->user()->isSuperAdmin() || auth()->user()->can('create', \App\Models\ContractType::class))
         <a href="{{ route('contract-types.create') }}" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
             <span data-feather="plus"></span>
             Add Contract Type
         </a>
         @endif
-    </div>
-
     </div>
 
     <div class="card" style="margin-top:12px; overflow-x:auto;">
@@ -146,10 +144,10 @@
                     </td>
                     <td style="padding:8px; text-align:right; white-space:nowrap;">
                         @if(!$isDeleted)
-                            @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('update', $type))
+                            @if(auth()->user()->isSuperAdmin() || auth()->user()->can('update', $type))
                             <a href="{{ route('contract-types.edit', $type) }}" style="background:#e0f2fe;color:#0369a1;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-right:6px;text-decoration:none;" title="Edit contract type"><span data-feather="edit"></span></a>
                             @endif
-                            @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('delete', $type))
+                            @if(auth()->user()->isSuperAdmin() || auth()->user()->can('delete', $type))
                             <form action="{{ route('contract-types.destroy', $type) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete Contract Type', subtitle: 'This will soft delete the contract type', message: 'Are you sure you want to delete {{ $type->name }}?', confirmText: 'Delete Contract Type', form: this});">
                                 @csrf
                                 @method('DELETE')
@@ -157,7 +155,7 @@
                             </form>
                             @endif
                         @else
-                            @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('restore', $type))
+                            @if(auth()->user()->isSuperAdmin() || auth()->user()->can('restore', $type))
                             <form action="{{ route('contract-types.restore', $type->id) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'restore', title: 'Restore Contract Type', subtitle: 'This will restore the contract type', message: 'Are you sure you want to restore {{ $type->name }}?', confirmText: 'Restore Contract Type', form: this});">
                                 @csrf
                                 @if(!empty($search))<input type="hidden" name="search" value="{{ $search }}">@endif

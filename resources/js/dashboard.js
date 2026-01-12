@@ -4,6 +4,47 @@
 
 document.addEventListener("DOMContentLoaded", () => {
 
+  // Contract Version actions (works with SPA navigation because it's delegated)
+  if (!document.__contractVersionActionsBound) {
+    document.addEventListener('click', (e) => {
+      const deleteBtn = e.target.closest('button[data-contract-version-delete]');
+      if (deleteBtn) {
+        const versionId = deleteBtn.getAttribute('data-version-id');
+        const versionNumber = deleteBtn.getAttribute('data-version-number') || '';
+        const form = document.getElementById(`deleteVersionForm-${versionId}`);
+        if (!form || typeof window.showConfirmModal !== 'function') return;
+
+        window.showConfirmModal({
+          type: 'delete',
+          title: 'Delete Contract Version',
+          subtitle: `Are you sure you want to delete ${versionNumber}?`,
+          message: `This action will soft delete the contract version. The version will be moved to the deleted versions section and can be restored later if needed.\n\nNote: All files and data associated with this version will be preserved.`,
+          confirmText: 'Delete Version',
+          form,
+        });
+        return;
+      }
+
+      const restoreBtn = e.target.closest('button[data-contract-version-restore]');
+      if (restoreBtn) {
+        const versionId = restoreBtn.getAttribute('data-version-id');
+        const versionNumber = restoreBtn.getAttribute('data-version-number') || '';
+        const form = document.getElementById(`restoreVersionForm-${versionId}`);
+        if (!form || typeof window.showConfirmModal !== 'function') return;
+
+        window.showConfirmModal({
+          type: 'restore',
+          title: 'Restore Contract Version',
+          subtitle: `Are you sure you want to restore ${versionNumber}?`,
+          message: 'This action will restore the deleted version and make it active again. All associated files and data will be accessible.',
+          confirmText: 'Restore Version',
+          form,
+        });
+      }
+    });
+    document.__contractVersionActionsBound = true;
+  }
+
   // FEATHER icons (safe)
   if (window.feather) {
     try { window.feather.replace(); } catch (e) {}

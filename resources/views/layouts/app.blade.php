@@ -72,6 +72,12 @@
     .notification-success { background: linear-gradient(180deg,#ecfdf5,#bbf7d0); border:1px solid #10b981; }
     .notification-error, .notification-deleted { background: linear-gradient(180deg,#ffeaea,#fecaca); border:1px solid #ef4444; }
     .notification-deleted .notification-message { color:#7f1d1d; }
+
+    /* SPA Loading Styles */
+    .spa-loading-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.05); z-index: 9999; align-items: center; justify-content: center; }
+    .spa-spinner { width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: spa-spin 0.8s linear infinite; }
+    @keyframes spa-spin { to { transform: rotate(360deg); } }
+    main.main.spa-loading { opacity: 0.6; pointer-events: none; transition: opacity 0.2s ease; }
 </style>
 
 <script>
@@ -111,7 +117,7 @@
 </div>
 
 <!-- Dashboard JS -->
-@vite(['resources/js/dashboard.js'])
+@vite(['resources/js/dashboard.js', 'resources/js/spa-navigation.js'])
 
 @stack('scripts')
 </body>

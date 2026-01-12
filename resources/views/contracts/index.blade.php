@@ -16,7 +16,7 @@
         $currentUser = auth()->user();
         $isSuperAdmin = $currentUser && $currentUser->isSuperAdmin();
         $currentStatus = request('status') ?? 'all';
-        
+
         $cards = [
             'all' => ['label' => 'All Contracts', 'count' => $statusCounts['all'] ?? 0, 'color' => '#0B6BBD'],
             'ongoing' => ['label' => 'Ongoing', 'count' => $statusCounts['ongoing'] ?? 0, 'color' => '#10b981'],
@@ -53,7 +53,7 @@
     <div class="card" style="margin-top:20px;padding:20px;">
         <form method="GET" action="{{ route('contracts.index') }}" style="display:flex;gap:16px;align-items:end;flex-wrap:wrap;">
             <input type="hidden" name="status" value="{{ request('status', 'all') }}">
-            
+
             {{-- Branch Filter for Super Admin --}}
             @if($isSuperAdmin)
                 <div style="flex:1;min-width:180px;">
@@ -88,9 +88,9 @@
                 <input
                     type="text"
                     name="search"
-                    placeholder="Search contracts..."
+                    placeholder="Search by contract number, company name..."
                     value="{{ request('search') }}"
-                    style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;"
+                    style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;width:100%;font-size:15px;"
                 >
             </div>
 
@@ -102,11 +102,12 @@
                 <a href="{{ route('contracts.index') }}" class="btn" style="background:#6b7280;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:500;">
                     Reset
                 </a>
-                @can('contracts.create')
-                    <a href="{{ route('contracts.create') }}" class="btn" style="background:#10b981;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:500;">
-                        + New Contract
+                @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.create'))
+                    <a href="{{ route('contracts.create') }}" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
+                        <span data-feather="plus"></span>
+                        New Contract
                     </a>
-                @endcan
+                @endif
             </div>
         </form>
     </div>
@@ -173,31 +174,97 @@
                                 </td>
                                 <td style="padding:14px 20px;text-align:center;">
                                     <div style="display:flex;gap:8px;justify-content:center;">
-                                        @can('contracts.view')
-                                            <a href="{{ route('contracts.show', $contract->id) }}" style="padding:8px 14px;background:#6b7280;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;">
-                                                View
-                                            </a>
-                                        @endcan
-                                        @can('contracts.edit')
-                                            <a href="{{ route('contracts.edit', $contract->id) }}" style="padding:8px 14px;background:#0B6BBD;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;">
-                                                Edit
-                                            </a>
-                                        @endcan
+                                        @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.view'))
+                                            <a href="{{ route('contracts.show', $contract->id) }}" style="background:#f3f4f6;color:#374151;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-right:6px;text-decoration:none;" title="View contract"><span data-feather="eye"></span></a>
+                                        @endif
+                                        @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.edit'))
+                                            <a href="{{ route('contracts.edit', $contract->id) }}" style="background:#e0f2fe;color:#0369a1;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;text-decoration:none;" title="Edit contract"><span data-feather="edit"></span></a>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>
                         @endforeach
                     </tbody>
                 </table>
+        <div style="margin-top:12px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:160px; color:var(--muted,#6b7280); font-weight:600;">
+                Total Contracts: {{ $contracts->total() }}
+            </div>
+
+            <div style="flex:1; display:flex; justify-content:center;">
+                @php
+                    $current = $contracts->currentPage();
+                    $last = $contracts->lastPage();
+                    $start = max(1, $current - 2);
+                    $end = min($last, $start + 4);
+                    if ($end - $start < 4) { $start = max(1, $end - 4); }
+                    $baseParams = request()->except(['page']);
+                @endphp
+
+                <nav aria-label="Pagination" style="display:inline-flex;align-items:center;gap:6px;background:var(--card);padding:6px 10px;border-radius:8px;">
+                    {{-- First --}}
+                    @php $firstColor = $current > 1 ? '#2563eb' : '#000'; @endphp
+                    @if($current > 1)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => 1])) }}" aria-label="First page" style="padding:6px 10px;border-radius:6px;background:transparent;color:{{ $firstColor }};text-decoration:none;font-weight:800;font-size:14px;">&laquo;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:6px 10px;color:{{ $firstColor }};font-weight:800;font-size:14px;">&laquo;</span>
+                    @endif
+
+                    {{-- Prev --}}
+                    @php $prevColor = $current > 1 ? '#2563eb' : '#000'; @endphp
+                    @if($current > 1)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $current - 1])) }}" aria-label="Previous page" style="padding:8px 12px;border-radius:6px;background:transparent;color:{{ $prevColor }};text-decoration:none;font-weight:800;font-size:15px;">&lt;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:8px 12px;color:{{ $prevColor }};font-weight:800;font-size:15px;">&lt;</span>
+                    @endif
+
+                    {{-- Page numbers --}}
+                    @for($p = $start; $p <= $end; $p++)
+                        @if($p == $current)
+                            <span aria-current="page" style="padding:9px 14px;border-radius:8px;background:#f3f4f6;color:#374151;font-weight:800;border:1px solid #e5e7eb;font-size:15px;">{{ $p }}</span>
+                        @else
+                            <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $p])) }}" style="padding:8px 12px;border-radius:6px;background:transparent;color:var(--text);text-decoration:none;font-weight:800;font-size:14px;" onmouseover="this.style.border='1px solid #22c55e';this.style.background='rgba(34,197,94,0.06)';" onmouseout="this.style.border='none';this.style.background='transparent';">{{ $p }}</a>
+                        @endif
+                    @endfor
+
+                    {{-- Next --}}
+                    @php $nextColor = $current < $last ? '#2563eb' : '#000'; @endphp
+                    @if($current < $last)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $current + 1])) }}" aria-label="Next page" style="padding:8px 12px;border-radius:6px;background:transparent;color:{{ $nextColor }};text-decoration:none;font-weight:800;font-size:15px;">&gt;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:8px 12px;color:{{ $nextColor }};font-weight:800;font-size:15px;">&gt;</span>
+                    @endif
+
+                    {{-- Last --}}
+                    @php $lastColor = $current < $last ? '#2563eb' : '#000'; @endphp
+                    @if($current < $last)
+                        <a href="{{ url()->current() . '?' . http_build_query(array_merge($baseParams, ['page' => $last])) }}" aria-label="Last page" style="padding:6px 10px;border-radius:6px;background:transparent;color:{{ $lastColor }};text-decoration:none;font-weight:800;font-size:14px;">&raquo;</a>
+                    @else
+                        <span aria-hidden="true" style="padding:6px 10px;color:{{ $lastColor }};font-weight:800;font-size:14px;">&raquo;</span>
+                    @endif
+                </nav>
+            </div>
+
+            <div style="flex:1; min-width:180px; display:flex; justify-content:flex-end; align-items:center; gap:8px;">
+                @php
+                    $currentPerPage = (int) request()->query('per_page', $contracts->perPage() ?? 10);
+                @endphp
+                <form method="GET" action="{{ url()->current() }}" id="perPageForm" style="display:flex;align-items:center;gap:8px;">
+                    @foreach(request()->except(['per_page','page']) as $k => $v)
+                        <input type="hidden" name="{{ $k }}" value="{{ $v }}" />
+                    @endforeach
+                    <label for="per_page" style="font-size:13px;color:var(--muted,#6b7280);">Show per Page:</label>
+                    <select name="per_page" id="per_page" onchange="document.getElementById('perPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid var(--muted,#e5e7eb);background:var(--card);color:var(--text,inherit);">
+                        @foreach([5,10,15,20,30] as $opt)
+                            <option value="{{ $opt }}" {{ $currentPerPage == $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                        @endforeach
+                    </select>
+                </form>
+            </div>
+        </div>
             </div>
         @endif
     </div>
-
-    @if ($contracts->isNotEmpty())
-        <div style="margin-top:20px;">
-            {{ $contracts->appends(request()->all())->links() }}
-        </div>
-    @endif
 
     @if (session('success'))
         <div style="position:fixed;bottom:20px;right:20px;background:#10b981;color:#fff;padding:16px 24px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:1000;">

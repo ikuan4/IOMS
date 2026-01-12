@@ -120,18 +120,26 @@ Route::middleware('auth')->group(function () {
         ->name('contracts.restore');
     Route::get('contracts/{contract}/export', [App\Http\Controllers\ContractController::class, 'exportExcel'])
         ->name('contracts.export');
-    Route::post('contracts/{contract}/test-notification', [App\Http\Controllers\ContractController::class, 'sendTestNotification'])
-        ->name('contracts.test-notification');
+    Route::post('contracts/{contract}/send-test-notification', [App\Http\Controllers\ContractController::class, 'sendTestNotification'])
+        ->name('contracts.send-test-notification');
     
     // Contract Versions
-    Route::get('contracts/{contract}/versions/create', [App\Http\Controllers\ContractController::class, 'createVersion'])
+    Route::get('contracts/{contract}/versions/create', [App\Http\Controllers\ContractVersionController::class, 'create'])
         ->name('contracts.versions.create');
-    Route::post('contracts/{contract}/versions', [App\Http\Controllers\ContractController::class, 'storeVersion'])
+    Route::post('contracts/{contract}/versions', [App\Http\Controllers\ContractVersionController::class, 'store'])
         ->name('contracts.versions.store');
-    Route::get('contracts/{contract}/versions/{version}/edit', [App\Http\Controllers\ContractController::class, 'editVersion'])
+    Route::get('contracts/versions/{version}/edit', [App\Http\Controllers\ContractVersionController::class, 'edit'])
         ->name('contracts.versions.edit');
-    Route::put('contracts/{contract}/versions/{version}', [App\Http\Controllers\ContractController::class, 'updateVersion'])
+    Route::put('contracts/versions/{version}', [App\Http\Controllers\ContractVersionController::class, 'update'])
         ->name('contracts.versions.update');
+    Route::delete('contracts/versions/{version}', [App\Http\Controllers\ContractVersionController::class, 'destroy'])
+        ->name('contracts.versions.destroy');
+    Route::post('contracts/versions/{id}/restore', [App\Http\Controllers\ContractVersionController::class, 'restore'])
+        ->name('contracts.versions.restore');
+    
+    // Delete version file
+    Route::delete('contracts/{contract}/versions/{version}/files/{file}', [App\Http\Controllers\ContractVersionController::class, 'deleteFile'])
+        ->name('contracts.versions.files.destroy');
 });
 
 

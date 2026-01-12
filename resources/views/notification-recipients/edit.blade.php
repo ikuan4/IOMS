@@ -20,7 +20,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('notification-recipients.update', $recipient->id) }}">
+    <form method="POST" action="{{ route('notification-recipients.update', $notificationRecipient->id) }}">
         @csrf
         @method('PUT')
 
@@ -33,7 +33,7 @@
                         type="text"
                         name="name"
                         id="name"
-                        value="{{ old('name', $recipient->name) }}"
+                        value="{{ old('name', $notificationRecipient->name) }}"
                         required
                         style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;"
                     >
@@ -48,7 +48,7 @@
                         type="text"
                         name="designation"
                         id="designation"
-                        value="{{ old('designation', $recipient->designation) }}"
+                        value="{{ old('designation', $notificationRecipient->designation) }}"
                         style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;"
                     >
                     @error('designation')
@@ -62,7 +62,7 @@
                         type="email"
                         name="email"
                         id="email"
-                        value="{{ old('email', $recipient->email) }}"
+                        value="{{ old('email', $notificationRecipient->email) }}"
                         required
                         style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;"
                     >
@@ -77,7 +77,7 @@
                         type="text"
                         name="mobile"
                         id="mobile"
-                        value="{{ old('mobile', $recipient->mobile) }}"
+                        value="{{ old('mobile', $notificationRecipient->mobile) }}"
                         style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;"
                     >
                     @error('mobile')
@@ -86,18 +86,54 @@
                 </div>
 
                 <div>
-                    <label style="display:flex;align-items:center;cursor:pointer;gap:10px;">
+                    <label style="font-size:15px;font-weight:500;margin-bottom:8px;display:block;">Status</label>
+                    <label class="toggle-switch" style="display:inline-flex;align-items:center;cursor:pointer;gap:12px;">
                         <input
                             type="checkbox"
                             name="is_active"
                             value="1"
-                            {{ old('is_active', $recipient->is_active) == '1' ? 'checked' : '' }}
-                            style="width:20px;height:20px;cursor:pointer;"
+                            {{ old('is_active', $notificationRecipient->is_active) == '1' ? 'checked' : '' }}
+                            class="toggle-input"
                         >
-                        <span style="font-size:15px;font-weight:500;">Active</span>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" style="font-size:15px;font-weight:500;">Active</span>
                     </label>
                     <p class="muted" style="font-size:13px;margin-top:6px;">Only active recipients will receive notifications.</p>
                 </div>
+
+                <style>
+                    .toggle-switch { position: relative; }
+                    .toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
+                    .toggle-slider {
+                        position: relative;
+                        display: inline-block;
+                        width: 48px;
+                        height: 24px;
+                        background-color: #cbd5e1;
+                        border-radius: 24px;
+                        transition: background-color 0.3s;
+                    }
+                    .toggle-slider::before {
+                        content: '';
+                        position: absolute;
+                        width: 18px;
+                        height: 18px;
+                        left: 3px;
+                        top: 3px;
+                        background-color: white;
+                        border-radius: 50%;
+                        transition: transform 0.3s;
+                    }
+                    .toggle-input:checked + .toggle-slider {
+                        background-color: #22c55e;
+                    }
+                    .toggle-input:checked + .toggle-slider::before {
+                        transform: translateX(24px);
+                    }
+                    .toggle-input:focus + .toggle-slider {
+                        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+                    }
+                </style>
 
             </div>
         </div>

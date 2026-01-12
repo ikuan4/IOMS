@@ -8,8 +8,8 @@
             <p id="confirm-message">Are you sure?</p>
         </div>
         <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;">
-            <button class="btn" onclick="closeConfirm();">Cancel</button>
-            <button id="confirm-ok" class="btn danger">Confirm</button>
+            <button type="button" class="btn" onclick="closeConfirm();">Cancel</button>
+            <button type="button" id="confirm-ok" class="btn danger">Confirm</button>
         </div>
     </div>
 </div>
@@ -114,10 +114,10 @@ if (typeof window.closeConfirm === 'undefined') {
 
             {{-- Modal Footer --}}
             <div class="confirm-modal-footer">
-                <button id="modalCancelBtn" class="confirm-btn confirm-btn-cancel" onclick="closeConfirmModal()">
+                <button type="button" id="modalCancelBtn" class="confirm-btn confirm-btn-cancel" onclick="closeConfirmModal()">
                     Cancel
                 </button>
-                <button id="modalConfirmBtn" class="confirm-btn confirm-btn-action">
+                <button type="button" id="modalConfirmBtn" class="confirm-btn confirm-btn-action">
                     Confirm
                 </button>
             </div>
@@ -284,11 +284,27 @@ if (typeof window.showConfirmModal === 'undefined') {
         const modalSubtitle = document.getElementById('modalSubtitle');
         const modalMessage = document.getElementById('modalMessage');
         const confirmBtn = document.getElementById('modalConfirmBtn');
+        const cancelBtn = document.getElementById('modalCancelBtn');
 
         // Set content
         modalTitle.textContent = options.title || 'Confirm Action';
         modalSubtitle.textContent = options.subtitle || 'This action requires confirmation';
-        modalMessage.textContent = options.message || 'Are you sure you want to proceed?';
+        modalMessage.innerHTML = (options.message || 'Are you sure you want to proceed?').replace(/\n/g, '<br>');
+
+        // Handle cancelOnly mode (informational modal with no action)
+        if (options.cancelOnly) {
+            confirmBtn.style.display = 'none';
+            cancelBtn.textContent = options.confirmText || 'OK';
+            cancelBtn.onclick = function() {
+                if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
+            };
+        } else {
+            confirmBtn.style.display = 'block';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = function() {
+                if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
+            };
+        }
 
         // Set colors based on type
         if (options.type === 'delete') {
@@ -307,6 +323,14 @@ if (typeof window.showConfirmModal === 'undefined') {
             confirmBtn.textContent = options.confirmText || 'Restore';
             confirmBtn.onmouseover = function() { this.style.background = '#b91c1c'; };
             confirmBtn.onmouseout = function() { this.style.background = '#dc2626'; };
+        } else if (options.type === 'warning') {
+            modalIcon.style.background = '#fef3c7';
+            modalIconFeather.style.color = '#d97706';
+            modalIconFeather.setAttribute('data-feather', 'alert-circle');
+            confirmBtn.style.background = '#d97706';
+            confirmBtn.textContent = options.confirmText || 'OK';
+            confirmBtn.onmouseover = function() { this.style.background = '#b45309'; };
+            confirmBtn.onmouseout = function() { this.style.background = '#d97706'; };
         } else {
             modalIcon.style.background = '#fef3c7';
             modalIconFeather.style.color = '#d97706';
@@ -329,13 +353,35 @@ if (typeof window.showConfirmModal === 'undefined') {
         modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
 
-        // Set up confirm button
-        confirmBtn.onclick = function() {
-            if (window.confirmModalForm) {
-                try { window.confirmModalForm.submit(); } catch (e) { /* ignore */ }
-            }
-            if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
-        };
+        // Set up confirm button (only if not cancelOnly)
+        if (!options.cancelOnly) {
+            confirmBtn.onclick = function() {
+                // Check if there's a custom onConfirm callback
+                if (typeof options.onConfirm === 'function') {
+                    options.onConfirm();
+                    return;
+                }
+
+                // Otherwise, use form submission
+                if (window.confirmModalForm) {
+                    try {
+                        // Use requestSubmit() if available (modern browsers) as it properly includes all form fields
+                        // Otherwise fall back to submit()
+                        if (typeof window.confirmModalForm.requestSubmit === 'function') {
+                            window.confirmModalForm.requestSubmit();
+                        } else {
+                            window.confirmModalForm.submit();
+                        }
+                        // Don't close immediately - let the page navigate
+                    } catch (e) {
+                        console.error('Form submission error:', e);
+                        if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
+                    }
+                } else {
+                    if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
+                }
+            };
+        }
     };
 }
 

@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('contract_id')
                 ->constrained('contracts')
                 ->cascadeOnUpdate()
-                ->cascadeOnDelete();
+                ->restrictOnDelete();
 
             // Version number: 1, 2, 3, ...
             $table->unsignedInteger('version_number');
