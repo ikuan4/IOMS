@@ -134,8 +134,10 @@ class RoleController extends Controller
             return response()->json($mapped);
         }
 
-        // Handle regular table AJAX requests
-        if ($request->ajax() && !$roleId) {
+        // Handle regular table AJAX requests (search/pagination inside roles page)
+        // SPA navigation also uses XHR fetch, but it needs the full HTML document.
+        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
+        if ($request->ajax() && !$roleId && !$isSpaNavigation) {
             /** @var view-string $view */
             $view = 'roles._roles_table';
             return view($view, compact('roles'));
@@ -323,34 +325,15 @@ class RoleController extends Controller
                 ->with('error', 'You cannot delete your own role.');
         }
 
-        // Check if role has assigned users
-        $userCount = User::where('role_id', $role->id)->count();
-        if ($userCount > 0) {
+        // Requirement: allow deleting role if it only has inactive users.
+        // Block deletion only when ACTIVE (not-deleted) users are assigned.
+        $activeUserCount = User::where('role_id', $role->id)
+            ->where('active', true)
+            ->count();
+
+        if ($activeUserCount > 0) {
             return redirect()->route('roles.index')
-                ->with('error', "Cannot delete role '{$role->name}' because it is assigned to {$userCount} user(s). Please reassign or remove users first.");
-        }
-
-
-
-        // If confirmation provided, soft-delete active mapped users first
-        if ($request->boolean('soft_delete_mapped_users')) {
-            try {
-                // Gather active mapped users (only direct role_id)
-                $users = User::where('role_id', $role->id)
-                    ->where('active', true)
-                    ->whereNull('deleted_at')
-                    ->get();
-
-                foreach ($users as $u) {
-                    try {
-                        $u->delete();
-                    } catch (\Throwable $__e) {
-                        // ignore individual failures
-                    }
-                }
-            } catch (\Throwable $__e) {
-                // ignore
-            }
+                ->with('error', "Cannot delete role '{$role->name}' because it has {$activeUserCount} active user(s). Please set them inactive or delete them first.");
         }
 
         $name = $role->name;
@@ -400,6 +383,60 @@ class RoleController extends Controller
             ->count();
 
         return response()->json(['count' => $usersCount]);
+    }
+
+    /**
+     * Check if a role can be deleted (check for dependencies)
+     */
+    public function checkDeleteDependencies(Role $role): JsonResponse
+    {
+        $this->authorize('view', $role);
+
+        // Performance: do count() + limit(5) samples (don’t load all users).
+        // Requirement: only ACTIVE users block role deletion.
+        $activeUsersQuery = User::where('role_id', $role->id)
+            ->where('active', true);
+
+        $activeUserCount = (clone $activeUsersQuery)->count();
+        $activeUsersSample = (clone $activeUsersQuery)
+            ->orderBy('id')
+            ->limit(5)
+            ->get(['id', 'name']);
+
+        $inactiveUsersQuery = User::where('role_id', $role->id)
+            ->where('active', false);
+
+        $inactiveUserCount = (clone $inactiveUsersQuery)->count();
+
+        $canDelete = $activeUserCount === 0;
+
+        $dependencies = [];
+        if ($activeUserCount > 0) {
+            $dependencies[] = [
+                'type' => 'active_users',
+                'count' => $activeUserCount,
+                'message' => 'Active users assigned to this role',
+                'items' => $activeUsersSample->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->toArray(),
+            ];
+        }
+
+        // Inactive users do not block deletion, but returning counts helps UX.
+        if ($inactiveUserCount > 0) {
+            $dependencies[] = [
+                'type' => 'inactive_users_info',
+                'count' => $inactiveUserCount,
+                'message' => 'Inactive users assigned (allowed)',
+                'items' => [],
+            ];
+        }
+
+        return response()->json([
+            'can_delete' => $canDelete,
+            'dependencies' => $dependencies,
+            'message' => $canDelete
+                ? 'Role can be deleted safely.'
+                : 'Cannot delete role. Please set assigned active users inactive or delete them first.'
+        ]);
     }
 
     public function managePriority(Request $request, Role $role): ContractView

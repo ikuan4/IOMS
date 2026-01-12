@@ -17,7 +17,7 @@
                         <a href="{{ route('branches.edit', $branch->id) }}" title="Edit" style="background:#e0f2fe;color:#0369a1;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-right:6px;text-decoration:none;font-size:15px;">
                             <span data-feather="edit"></span>
                         </a>
-                        <form action="{{ route('branches.destroy', $branch->id) }}" method="POST" style="display:inline-block; margin-left:0;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete Branch', subtitle: 'This will soft delete the branch', message: 'Are you sure you want to delete {{ $branch->name }}?', confirmText: 'Delete Branch', form: this});">
+                        <form action="{{ route('branches.destroy', $branch->id) }}" method="POST" style="display:inline-block; margin-left:0;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete Branch', subtitle: 'This will soft delete the branch', message: 'Are you sure you want to delete {{ addslashes($branch->name) }}?', confirmText: 'Delete Branch', checkDependenciesUrl: '{{ route('branches.check_delete_dependencies', $branch->id) }}', form: this});">
                             @csrf
                             @method('DELETE')
                             <button type="submit" title="Delete" style="background:#fee2e2;color:#b91c1c;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-left:6px;font-size:15px;">

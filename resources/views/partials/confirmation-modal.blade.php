@@ -1,96 +1,4 @@
-<div id="confirmation-modal" class="modal" style="display:none;">
-    <div class="modal-backdrop" onclick="closeConfirm()"></div>
-    <div class="modal-card">
-        <div class="modal-header">
-            <h4 id="confirm-title">Confirm</h4>
-        </div>
-        <div class="modal-body">
-            <p id="confirm-message">Are you sure?</p>
-        </div>
-        <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;">
-            <button type="button" class="btn" onclick="closeConfirm();">Cancel</button>
-            <button type="button" id="confirm-ok" class="btn danger">Confirm</button>
-        </div>
-    </div>
-</div>
-
-<style>
-.modal {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-}
-.modal-backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-}
-.modal-card {
-    position: relative;
-    background: var(--card, #ffffff);
-    color: var(--text, #0f1724);
-    border-radius: 8px;
-    padding: 16px;
-    width: 480px;
-    max-width: 92%;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-}
-.modal-header h4 {
-    margin: 0 0 8px 0;
-    color: var(--text, #0f1724);
-}
-.modal-body {
-    color: var(--text, #0f1724);
-}
-.btn.danger {
-    background: #ef4444;
-    color: #fff;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-}
-.btn {
-    background: #e5e7eb;
-    color: #111827;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: none;
-    cursor: pointer;
-}
-</style>
-
-<script>
-if (typeof window.showConfirm === 'undefined') {
-    window.showConfirm = function(title, message, onConfirm) {
-        const titleEl = document.getElementById('confirm-title');
-        const msgEl = document.getElementById('confirm-message');
-        const modal = document.getElementById('confirmation-modal');
-        const ok = document.getElementById('confirm-ok');
-        if (titleEl) titleEl.textContent = title || 'Confirm';
-        if (msgEl) msgEl.textContent = message || 'Are you sure?';
-        if (ok) {
-            ok.onclick = function(){
-                if (typeof window.closeConfirm === 'function') window.closeConfirm();
-                if (typeof onConfirm === 'function') onConfirm();
-            };
-        }
-        if (modal) modal.style.display = 'block';
-    };
-}
-
-if (typeof window.closeConfirm === 'undefined') {
-    window.closeConfirm = function(){
-        const modal = document.getElementById('confirmation-modal');
-        if (modal) modal.style.display = 'none';
-    };
-}
-</script>
-
-{{-- Advanced Confirmation Modal with Theme Support --}}
+{{-- Confirmation Modal with Theme Support --}}
 <div id="confirmModal" class="confirm-modal">
     <div class="confirm-modal-container">
         <div class="confirm-modal-content">
@@ -110,6 +18,11 @@ if (typeof window.closeConfirm === 'undefined') {
             {{-- Modal Body --}}
             <div class="confirm-modal-body">
                 <p id="modalMessage">Are you sure you want to proceed?</p>
+                <div id="modalDependencies" style="display:none; margin-top: 16px; padding: 12px; background: #fef2f2; border-left: 4px solid #dc2626; border-radius: 6px;">
+                    <h4 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #991b1b;">Dependencies Found</h4>
+                    <ul id="modalDependenciesList" style="margin: 0; padding-left: 20px; font-size: 13px; color: #7f1d1d;">
+                    </ul>
+                </div>
             </div>
 
             {{-- Modal Footer --}}
@@ -283,13 +196,130 @@ if (typeof window.showConfirmModal === 'undefined') {
         const modalTitle = document.getElementById('modalTitle');
         const modalSubtitle = document.getElementById('modalSubtitle');
         const modalMessage = document.getElementById('modalMessage');
+        const modalDependencies = document.getElementById('modalDependencies');
+        const modalDependenciesList = document.getElementById('modalDependenciesList');
         const confirmBtn = document.getElementById('modalConfirmBtn');
         const cancelBtn = document.getElementById('modalCancelBtn');
+
+        // Reset dependencies display
+        if (modalDependencies) modalDependencies.style.display = 'none';
+        if (modalDependenciesList) modalDependenciesList.innerHTML = '';
 
         // Set content
         modalTitle.textContent = options.title || 'Confirm Action';
         modalSubtitle.textContent = options.subtitle || 'This action requires confirmation';
         modalMessage.innerHTML = (options.message || 'Are you sure you want to proceed?').replace(/\n/g, '<br>');
+
+        // Store form reference FIRST
+        window.confirmModalForm = options.form;
+
+        // Set up confirm button click handler FIRST - before any async operations
+        const setupConfirmButton = function() {
+            if (!options.cancelOnly) {
+                confirmBtn.onclick = function() {
+                    // Check if there's a custom onConfirm callback
+                    if (typeof options.onConfirm === 'function') {
+                        options.onConfirm();
+                        return;
+                    }
+
+                    // Otherwise, use form submission
+                    if (window.confirmModalForm) {
+                        try {
+                            // IMPORTANT: forms in this app often have onsubmit="event.preventDefault(); showConfirmModal(...)".
+                            // requestSubmit() triggers submit handlers and would re-open the modal + prevent the request.
+                            // submit() bypasses submit handlers and performs the actual POST/DELETE.
+                            confirmBtn.disabled = true;
+                            confirmBtn.style.opacity = '0.7';
+                            window.confirmModalForm.submit();
+                            // Don't close immediately - let the page navigate
+                        } catch (e) {
+                            console.error('Form submission error:', e);
+                            if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
+                        }
+                    } else {
+                        console.warn('No form reference found');
+                        if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
+                    }
+                };
+            }
+        };
+
+        // Setup confirm button handler immediately
+        setupConfirmButton();
+
+        // If there's a dependency check URL, fetch dependencies first
+        if (options.checkDependenciesUrl) {
+            // Show loading state
+            modalMessage.innerHTML = '<div style="text-align:center;padding:20px;"><span>Checking dependencies...</span></div>';
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = '0.5';
+
+            fetch(options.checkDependenciesUrl, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Restore original message
+                modalMessage.innerHTML = (options.message || 'Are you sure you want to proceed?').replace(/\n/g, '<br>');
+
+                if (data.can_delete === false || data.can_proceed === false) {
+                    // Has dependencies - show them and hide delete button
+                    if (data.dependencies && data.dependencies.length > 0) {
+                        modalDependencies.style.display = 'block';
+                        modalDependenciesList.innerHTML = '';
+
+                        data.dependencies.forEach(dep => {
+                            const li = document.createElement('li');
+                            li.style.marginBottom = '4px';
+                            let text = `<strong>${dep.message}</strong>: ${dep.count} item(s)`;
+                            if (dep.details) {
+                                text = `<strong>${dep.message}</strong>: ${dep.details}`;
+                            }
+                            if (dep.items && dep.items.length > 0) {
+                                text += '<ul style="margin-top:4px;padding-left:20px;">';
+                                dep.items.forEach(item => {
+                                    text += `<li>${item.name}</li>`;
+                                });
+                                if (dep.count > dep.items.length) {
+                                    text += `<li><em>...and ${dep.count - dep.items.length} more</em></li>`;
+                                }
+                                text += '</ul>';
+                            }
+                            li.innerHTML = text;
+                            modalDependenciesList.appendChild(li);
+                        });
+                    }
+
+                    // Hide confirm button, show only cancel
+                    confirmBtn.style.display = 'none';
+                    cancelBtn.textContent = 'Close';
+                } else {
+                    // Can delete - show confirm button
+                    confirmBtn.style.display = 'block';
+                    confirmBtn.disabled = false;
+                    confirmBtn.style.opacity = '1';
+                    modalDependencies.style.display = 'none';
+                    // Re-setup handler after async operation
+                    setupConfirmButton();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking dependencies:', error);
+                modalMessage.innerHTML = (options.message || 'Are you sure you want to proceed?').replace(/\n/g, '<br>');
+                confirmBtn.disabled = false;
+                confirmBtn.style.opacity = '1';
+                // Re-setup handler after async operation
+                setupConfirmButton();
+            });
+        } else {
+            // No dependency check - proceed normally
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+        }
 
         // Handle cancelOnly mode (informational modal with no action)
         if (options.cancelOnly) {
@@ -346,42 +376,9 @@ if (typeof window.showConfirmModal === 'undefined') {
             feather.replace();
         }
 
-        // Store form reference
-        window.confirmModalForm = options.form;
-
         // Show modal
         modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
-
-        // Set up confirm button (only if not cancelOnly)
-        if (!options.cancelOnly) {
-            confirmBtn.onclick = function() {
-                // Check if there's a custom onConfirm callback
-                if (typeof options.onConfirm === 'function') {
-                    options.onConfirm();
-                    return;
-                }
-
-                // Otherwise, use form submission
-                if (window.confirmModalForm) {
-                    try {
-                        // Use requestSubmit() if available (modern browsers) as it properly includes all form fields
-                        // Otherwise fall back to submit()
-                        if (typeof window.confirmModalForm.requestSubmit === 'function') {
-                            window.confirmModalForm.requestSubmit();
-                        } else {
-                            window.confirmModalForm.submit();
-                        }
-                        // Don't close immediately - let the page navigate
-                    } catch (e) {
-                        console.error('Form submission error:', e);
-                        if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
-                    }
-                } else {
-                    if (typeof window.closeConfirmModal === 'function') window.closeConfirmModal();
-                }
-            };
-        }
     };
 }
 

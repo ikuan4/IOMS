@@ -111,8 +111,6 @@
         </div>
     </div>
 
-    @include('partials.confirmation-modal')
-
     <script>
         let __userSearchTimer = null;
         function debouncedSearch() {

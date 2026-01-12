@@ -66,12 +66,22 @@ class ContractTypeController extends Controller
                 break;
         }
 
-        $contractTypes = $query->paginate(10)->withQueryString();
+        // Respect per-page selection from query, with a safe whitelist and default 10
+        $allowed = [5,10,15,20,30];
+        $perPage = (int) $request->query('per_page', 10);
+        if (!in_array($perPage, $allowed, true)) {
+            $perPage = 10;
+        }
 
-        if ($request->ajax()) {
+        $contractTypes = $query->paginate($perPage)->withQueryString();
+
+        // Table refresh uses AJAX, but SPA navigation also uses XHR fetch.
+        // SPA navigation needs a full HTML document containing <main.main>.
+        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
+        if ($request->ajax() && ! $isSpaNavigation) {
             /** @var view-string $view */
             $view = 'contract-types._contract_types_table';
-            return view($view, compact('contractTypes'));
+            return view($view, compact('contractTypes', 'search', 'status'));
         }
 
         return view('contract-types.index', compact(

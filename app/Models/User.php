@@ -32,6 +32,9 @@ use App\Models\Branch;
  * @property int|null $deleted_by
  * @property int|null $restored_by
  * @property \Illuminate\Support\Carbon|null $restored_at
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
  * @property-read \App\Models\Role|null $role
  * @property-read \App\Models\Branch|null $branch
  */

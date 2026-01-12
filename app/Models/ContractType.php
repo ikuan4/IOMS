@@ -9,6 +9,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Traits\HasAuditFields;
 
+/**
+ * @property int $id
+ * @property int $branch_id
+ * @property string $name
+ * @property string|null $description
+ * @property string $code
+ * @property bool $is_active
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ * @property int|null $deleted_by
+ * @property int|null $restored_by
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property \Illuminate\Support\Carbon|null $restored_at
+ * @property-read \App\Models\Branch|null $branch
+ */
 class ContractType extends Model
 {
     use HasFactory, SoftDeletes, HasAuditFields;

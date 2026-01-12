@@ -187,10 +187,41 @@ class SPANavigator {
             link.classList.remove('active');
         });
 
-        // Add active class to matching link
-        const matchingLink = Array.from(sidebarLinks).find(link => {
+        const normalizePath = (rawUrl) => {
+            if (!rawUrl) return null;
+            try {
+                const parsed = new URL(rawUrl, window.location.origin);
+                let path = parsed.pathname || '/';
+                // Normalize trailing slash (except root)
+                if (path.length > 1 && path.endsWith('/')) {
+                    path = path.slice(0, -1);
+                }
+                return path;
+            } catch {
+                return null;
+            }
+        };
+
+        const currentPath = normalizePath(url);
+
+        // Pick the most specific matching link (longest matching path)
+        let matchingLink = null;
+        let bestMatchLength = -1;
+
+        Array.from(sidebarLinks).forEach(link => {
             const linkHref = link.getAttribute('href');
-            return linkHref && (url === linkHref || url.startsWith(linkHref + '/'));
+            const linkPath = normalizePath(linkHref);
+            if (!currentPath || !linkPath) return;
+
+            const isExact = currentPath === linkPath;
+            const isPrefix = currentPath.startsWith(linkPath + '/');
+            if (!isExact && !isPrefix) return;
+
+            const score = linkPath.length + (isExact ? 10000 : 0);
+            if (score > bestMatchLength) {
+                bestMatchLength = score;
+                matchingLink = link;
+            }
         });
 
         if (matchingLink) {

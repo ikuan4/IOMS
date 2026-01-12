@@ -124,13 +124,32 @@ class UserController extends Controller
             'deleted'     => (clone $baseCountQuery)->onlyTrashed()->count(),
         ];
 
-        if ($request->ajax()) {
+        // Table refresh uses AJAX, but SPA navigation also uses XHR fetch.
+        // SPA navigation needs a full HTML document containing <main.main>.
+        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
+        if ($request->ajax() && ! $isSpaNavigation) {
             /** @var view-string $view */
             $view = 'users._users_table';
             return view($view, compact('users'));
         }
 
         return view('users.index', compact('users', 'search', 'status', 'statusCounts'));
+    }
+
+    /* -------------------------------------------------------------
+     | Show
+     |-------------------------------------------------------------*/
+    public function show(User $user): View
+    {
+        $this->authorize('view', $user);
+
+        $user->load(['role' => function($q) {
+            $q->withTrashed();
+        }, 'branch' => function($q) {
+            $q->withTrashed();
+        }]);
+
+        return view('users.show', compact('user'));
     }
 
     /* -------------------------------------------------------------
@@ -341,10 +360,18 @@ class UserController extends Controller
                 }
                 }
 
-            $user->fill($data);
+            // Only fill fields that should be mass-assigned (exclude password)
+            $user->fill([
+                'name' => $data['name'],
+                'mobile' => $data['mobile'],
+                'email' => $data['email'],
+                'role_id' => $data['role_id'],
+            ]);
+
             $user->active    = $request->boolean('active', false);
             $user->branch_id = $request->input('branch_id') ?? $role->branch_id ?? $user->branch_id;
 
+            // Only update password if provided
             if (! empty($data['password'])) {
                 $user->password = Hash::make($data['password']);
             }
@@ -504,5 +531,78 @@ class UserController extends Controller
         $user->save();
 
         return back()->with('status', 'User restored successfully.');
+    }
+
+    /**
+     * Check if a user can be restored or activated (check parent dependencies)
+     */
+    public function checkDependencies(Request $request, int $id): \Illuminate\Http\JsonResponse
+    {
+        $user = User::withTrashed()->with(['role' => function($q) { $q->withTrashed(); }, 'branch' => function($q) { $q->withTrashed(); }])->findOrFail($id);
+
+        $this->authorize('view', $user);
+
+        $dependencies = [];
+        $canProceed = true;
+
+        // Check if user is deleted and needs restore
+        if ($user->trashed()) {
+            // Check role status
+            if ($user->role_id) {
+                $role = $user->role;
+                if ($role && $role->trashed()) {
+                    $canProceed = false;
+                    $dependencies[] = [
+                        'type' => 'deleted_role',
+                        'message' => 'Assigned role is deleted',
+                        'details' => "Role '{$role->name}' must be restored first"
+                    ];
+                } elseif ($role && !($role->is_active ?? true)) {
+                    $canProceed = false;
+                    $dependencies[] = [
+                        'type' => 'inactive_role',
+                        'message' => 'Assigned role is inactive',
+                        'details' => "Role '{$role->name}' must be activated first"
+                    ];
+                }
+            }
+
+            // Check branch status
+            if ($user->branch_id) {
+                $branch = $user->branch;
+                if ($branch && $branch->trashed()) {
+                    $canProceed = false;
+                    $dependencies[] = [
+                        'type' => 'deleted_branch',
+                        'message' => 'Assigned branch is deleted',
+                        'details' => "Branch '{$branch->name}' must be restored first"
+                    ];
+                }
+            }
+        }
+
+        // Check if user is being activated
+        if (!$user->trashed() && !$user->active) {
+            // Check role status
+            if ($user->role_id) {
+                $role = $user->role;
+                if ($role && !($role->is_active ?? true)) {
+                    $canProceed = false;
+                    $dependencies[] = [
+                        'type' => 'inactive_role',
+                        'message' => 'Assigned role is inactive',
+                        'details' => "Role '{$role->name}' must be activated first"
+                    ];
+                }
+            }
+        }
+
+        return response()->json([
+            'can_proceed' => $canProceed,
+            'dependencies' => $dependencies,
+            'message' => $canProceed
+                ? 'User can be restored/activated.'
+                : 'Cannot proceed. Please resolve dependencies first.'
+        ]);
     }
 }

@@ -68,6 +68,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/roles/{role}/mapped-active-users', [RoleController::class, 'mappedActiveUsers'])
         ->name('roles.mapped_active_users');
 
+    // Ajax: check delete dependencies for role
+    Route::get('/roles/{role}/check-delete-dependencies', [RoleController::class, 'checkDeleteDependencies'])
+        ->name('roles.check_delete_dependencies');
+
     // Role restore
     Route::post('/roles/{id}/restore', [RoleController::class, 'restore'])
         ->name('roles.restore');
@@ -90,6 +94,10 @@ Route::middleware('auth')->group(function () {
     Route::resource('users', UserController::class);
     Route::post('users/{user}/restore', [UserController::class, 'restore'])->name('users.restore');
 
+    // Ajax: check user dependencies for restore/activation
+    Route::get('/users/{user}/check-dependencies', [UserController::class, 'checkDependencies'])
+        ->name('users.check_dependencies');
+
     // Developer profile routes (self-update without role validation)
     Route::get('/profile', [UserController::class, 'editProfile'])->name('profile.edit');
     Route::put('/profile', [UserController::class, 'updateProfile'])->name('profile.update');
@@ -100,6 +108,10 @@ Route::middleware('auth')->group(function () {
     Route::resource('branches', App\Http\Controllers\BranchController::class);
     Route::get('branches/{branch}/export', [App\Http\Controllers\BranchController::class, 'export'])->name('branches.export');
     Route::post('branches/{branch}/restore', [App\Http\Controllers\BranchController::class, 'restore'])->name('branches.restore');
+
+    // Ajax: check branch delete dependencies
+    Route::get('/branches/{branch}/check-delete-dependencies', [App\Http\Controllers\BranchController::class, 'checkDeleteDependencies'])
+        ->name('branches.check_delete_dependencies');
 });
 
 // Contract Management (requires auth)
@@ -108,12 +120,12 @@ Route::middleware('auth')->group(function () {
     Route::resource('contract-types', App\Http\Controllers\ContractTypeController::class);
     Route::post('contract-types/{id}/restore', [App\Http\Controllers\ContractTypeController::class, 'restore'])
         ->name('contract-types.restore');
-    
+
     // Notification Recipients
     Route::resource('notification-recipients', App\Http\Controllers\NotificationRecipientController::class);
     Route::post('notification-recipients/{id}/restore', [App\Http\Controllers\NotificationRecipientController::class, 'restore'])
         ->name('notification-recipients.restore');
-    
+
     // Contracts
     Route::resource('contracts', App\Http\Controllers\ContractController::class);
     Route::post('contracts/{id}/restore', [App\Http\Controllers\ContractController::class, 'restore'])
@@ -122,7 +134,7 @@ Route::middleware('auth')->group(function () {
         ->name('contracts.export');
     Route::post('contracts/{contract}/send-test-notification', [App\Http\Controllers\ContractController::class, 'sendTestNotification'])
         ->name('contracts.send-test-notification');
-    
+
     // Contract Versions
     Route::get('contracts/{contract}/versions/create', [App\Http\Controllers\ContractVersionController::class, 'create'])
         ->name('contracts.versions.create');
@@ -136,7 +148,7 @@ Route::middleware('auth')->group(function () {
         ->name('contracts.versions.destroy');
     Route::post('contracts/versions/{id}/restore', [App\Http\Controllers\ContractVersionController::class, 'restore'])
         ->name('contracts.versions.restore');
-    
+
     // Delete version file
     Route::delete('contracts/{contract}/versions/{version}/files/{file}', [App\Http\Controllers\ContractVersionController::class, 'deleteFile'])
         ->name('contracts.versions.files.destroy');

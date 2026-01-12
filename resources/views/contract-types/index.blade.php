@@ -248,7 +248,7 @@
         </div>
     </div>
 
-    @include('partials.confirmation-modal')
+
 
     <script>
         // AJAX search for contract types

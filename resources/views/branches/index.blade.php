@@ -30,8 +30,6 @@
         </div>
     </div>
 
-    @include('partials.confirmation-modal')
-
     <script>
         // AJAX search & pagination for branches
         let __branchSearchTimer = null;

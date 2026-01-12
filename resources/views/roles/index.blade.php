@@ -547,53 +547,18 @@
 
     <script>
         async function checkRoleMappedUsers(form, roleId, roleName) {
-            try {
-                const url = `{{ url('/') }}/roles/${roleId}/mapped-active-users`;
-                const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                if (!res.ok) throw new Error('Network error');
-                const data = await res.json();
-                const count = parseInt(data.count || 0, 10);
-                if (count <= 0) {
-                    // no mapped active users — show normal delete confirmation
-                    showConfirmModal({
-                        type: 'delete',
-                        title: 'Delete Role',
-                        subtitle: `Are you sure you want to delete "${roleName}"?`,
-                        message: 'This action will soft delete the role. You can restore it later from the deleted roles section.',
-                        confirmText: 'Delete Role',
-                        form: form
-                    });
-                    return;
-                }
+            // Use the new dependency check endpoint
+            const checkUrl = `{{ url('/') }}/roles/${roleId}/check-delete-dependencies`;
 
-                // Users are assigned - show informative modal that prevents deletion
-                showConfirmModal({
-                    type: 'warning',
-                    title: 'Cannot Delete Role',
-                    subtitle: `Role "${roleName}" has ${count} active user${count===1? '' : 's'} assigned`,
-                    message: `This role cannot be deleted because it is currently assigned to ${count} active user${count===1? '' : 's'}.
-
-To delete this role, you must first:
-• Reassign the user${count===1? '' : 's'} to a different role, or
-• Delete the user${count===1? '' : 's'} from the User Management module
-
-You can view the assigned users by clicking on the role name in the table above.`,
-                    confirmText: 'OK, Got It',
-                    form: null, // No form submission
-                    cancelOnly: true
-                });
-            } catch (e) {
-                console.error(e);
-                // fallback: show basic confirmation
-                showConfirmModal({
-                    type: 'delete',
-                    title: 'Delete Role',
-                    subtitle: `Are you sure you want to delete "${roleName}"?`,
-                    message: 'This action will soft delete the role.',
-                    confirmText: 'Delete Role',
-                    form: form
-                });
-            }
+            showConfirmModal({
+                type: 'delete',
+                title: 'Delete Role',
+                subtitle: `Checking if "${roleName}" can be deleted...`,
+                message: 'Verifying dependencies...',
+                confirmText: 'Delete Role',
+                checkDependenciesUrl: checkUrl,
+                form: form
+            });
         }
     </script>
             </div>
@@ -627,8 +592,6 @@ You can view the assigned users by clicking on the role name in the table above.
             </div>
         </div>
     </div>
-
-    @include('partials.confirmation-modal')
 
     <script>
         // AJAX search for roles

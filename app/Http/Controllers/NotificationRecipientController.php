@@ -61,9 +61,19 @@ class NotificationRecipientController extends Controller
             $query->onlyTrashed();
         }
 
-        $recipients = $query->paginate(10)->appends($request->query());
+        // Respect per-page selection from query, with a safe whitelist and default 10
+        $allowed = [5,10,15,20,30];
+        $perPage = (int) $request->query('per_page', 10);
+        if (!in_array($perPage, $allowed, true)) {
+            $perPage = 10;
+        }
 
-        if ($request->ajax()) {
+        $recipients = $query->paginate($perPage)->withQueryString();
+
+        // Table refresh uses AJAX, but SPA navigation also uses XHR fetch.
+        // SPA navigation needs a full HTML document containing <main.main>.
+        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
+        if ($request->ajax() && ! $isSpaNavigation) {
             return view('notification-recipients._recipients_table', compact('recipients'));
         }
 

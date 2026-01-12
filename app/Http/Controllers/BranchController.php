@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\AuditLog;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
@@ -41,7 +42,10 @@ class BranchController extends Controller
 
         $branches = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
 
-        if ($request->ajax()) {
+        // Table refresh uses AJAX, but SPA navigation also uses XHR fetch.
+        // SPA navigation needs a full HTML document containing <main.main>.
+        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
+        if ($request->ajax() && ! $isSpaNavigation) {
             return view('branches._branches_table', compact('branches'));
         }
 
@@ -99,7 +103,10 @@ class BranchController extends Controller
 
         $users = $usersQuery->orderBy('name')->paginate($perPage)->withQueryString();
 
-        if ($request->ajax()) {
+        // Table refresh uses AJAX, but SPA navigation also uses XHR fetch.
+        // SPA navigation needs a full HTML document containing <main.main>.
+        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
+        if ($request->ajax() && ! $isSpaNavigation) {
             return view('branches._users_table', compact('users'));
         }
 
@@ -189,20 +196,108 @@ class BranchController extends Controller
     {
         $this->authorize('delete', $branch);
 
-        if ($branch->users()->count()) {
+        // Requirement: allow deleting branch if it only has inactive users/roles.
+        // Block deletion only when ACTIVE (not-deleted) users or active roles exist.
+        $activeUserCount = $branch->users()->where('active', true)->count();
+        if ($activeUserCount > 0) {
             return redirect()->route('branches.index')
-                ->with('error', 'Cannot delete branch with active users.');
+                ->with('error', "Cannot delete branch '{$branch->name}' because it has {$activeUserCount} active user(s). Please set them inactive or delete them first.");
         }
 
-        if ($branch->roles()->count()) {
+        $activeRoleCount = $branch->roles()->where('is_active', true)->count();
+        if ($activeRoleCount > 0) {
             return redirect()->route('branches.index')
-                ->with('error', 'Cannot delete branch with assigned roles.');
+                ->with('error', "Cannot delete branch '{$branch->name}' because it has {$activeRoleCount} active role(s). Please set them inactive or delete them first.");
         }
 
         AuditLog::log('delete_branch', $branch, $branch->toArray());
 
         $branch->delete();
         return redirect()->route('branches.index')->with('deleted', 'Branch deleted.');
+    }
+
+    /**
+     * Check if a branch can be deleted (check for dependencies)
+     */
+    public function checkDeleteDependencies(Branch $branch): \Illuminate\Http\JsonResponse
+    {
+        $this->authorize('view', $branch);
+
+        // Performance: count() + small samples; don’t load full datasets.
+        // Requirement: only ACTIVE users/roles block deletion.
+        $activeUsersQuery = User::where('branch_id', $branch->id)
+            ->where('active', true);
+
+        $activeUserCount = (clone $activeUsersQuery)->count();
+        $activeUsersSample = (clone $activeUsersQuery)
+            ->orderBy('id')
+            ->limit(5)
+            ->get(['id', 'name']);
+
+        $inactiveUserCount = User::where('branch_id', $branch->id)
+            ->where('active', false)
+            ->count();
+
+        $activeRolesQuery = Role::where('branch_id', $branch->id)
+            ->where('is_active', true);
+
+        $activeRoleCount = (clone $activeRolesQuery)->count();
+        $activeRolesSample = (clone $activeRolesQuery)
+            ->orderBy('id')
+            ->limit(5)
+            ->get(['id', 'name']);
+
+        $inactiveRoleCount = Role::where('branch_id', $branch->id)
+            ->where('is_active', false)
+            ->count();
+
+        $canDelete = $activeUserCount === 0 && $activeRoleCount === 0;
+
+        $dependencies = [];
+        if ($activeUserCount > 0) {
+            $dependencies[] = [
+                'type' => 'active_users',
+                'count' => $activeUserCount,
+                'message' => 'Active users in this branch',
+                'items' => $activeUsersSample->map(fn($u) => ['id' => $u->id, 'name' => $u->name])->toArray(),
+            ];
+        }
+
+        if ($activeRoleCount > 0) {
+            $dependencies[] = [
+                'type' => 'active_roles',
+                'count' => $activeRoleCount,
+                'message' => 'Active roles in this branch',
+                'items' => $activeRolesSample->map(fn($r) => ['id' => $r->id, 'name' => $r->name])->toArray(),
+            ];
+        }
+
+        // Inactive children do not block deletion; include counts for UX.
+        if ($inactiveUserCount > 0) {
+            $dependencies[] = [
+                'type' => 'inactive_users_info',
+                'count' => $inactiveUserCount,
+                'message' => 'Inactive users in this branch (allowed)',
+                'items' => [],
+            ];
+        }
+
+        if ($inactiveRoleCount > 0) {
+            $dependencies[] = [
+                'type' => 'inactive_roles_info',
+                'count' => $inactiveRoleCount,
+                'message' => 'Inactive roles in this branch (allowed)',
+                'items' => [],
+            ];
+        }
+
+        return response()->json([
+            'can_delete' => $canDelete,
+            'dependencies' => $dependencies,
+            'message' => $canDelete
+                ? 'Branch can be deleted safely.'
+                : 'Cannot delete branch. Please set active users/roles inactive or delete them first.'
+        ]);
     }
 
     public function restore(int $id): RedirectResponse
