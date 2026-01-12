@@ -67,13 +67,15 @@
     <div class="card" style="margin-top:20px;padding:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;">
             {{-- Search form --}}
-            <form method="GET" action="{{ route('notification-recipients.index') }}" style="flex:1;min-width:250px;max-width:400px;">
+            <form method="GET" action="{{ route('notification-recipients.index') }}" id="recipientSearchForm" style="flex:1;min-width:250px;max-width:400px;">
                 <input type="hidden" name="status" value="{{ request('status', 'all') }}">
                 <input
                     type="text"
                     name="search"
+                    id="recipientSearchInput"
                     placeholder="Search by name, email, designation..."
                     value="{{ request('search') }}"
+                    oninput="debouncedRecipientSearch()"
                     style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;width:100%;font-size:15px;"
                 >
             </form>
@@ -92,7 +94,72 @@
 
     {{-- Recipients Table --}}
     <div class="card" style="margin-top:20px;padding:0;overflow:hidden;">
-        @if ($recipients->isEmpty())
+        <div id="recipientsTableWrapper">
+            @include('notification-recipients._recipients_table')
+        </div>
+    </div>
+
+    @if (session('success'))
+        <div style="position:fixed;bottom:20px;right:20px;background:#10b981;color:#fff;padding:16px 24px;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:1000;">
+            {{ session('success') }}
+        </div>
+        <script>
+            setTimeout(() => {
+                const alert = document.querySelector('[style*="position:fixed"]');
+                if(alert) alert.remove();
+            }, 3000);
+        </script>
+    @endif
+
+    @include('partials.confirmation-modal')
+
+    <script>
+        let __recipientSearchTimer = null;
+        function debouncedRecipientSearch() {
+            clearTimeout(__recipientSearchTimer);
+            __recipientSearchTimer = setTimeout(() => { ajaxFetchRecipients(1); }, 300);
+        }
+
+        function ajaxFetchRecipients(page = 1) {
+            const form = document.getElementById('recipientSearchForm');
+            const params = new URLSearchParams(new FormData(form));
+            const perPageSelect = document.getElementById('per_page');
+            if (perPageSelect) params.set('per_page', perPageSelect.value);
+            params.set('page', page);
+            const url = `${location.pathname}?${params.toString()}`;
+
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => {
+                    if (!r.ok) throw new Error('Network error');
+                    return r.text();
+                })
+                .then(html => {
+                    document.getElementById('recipientsTableWrapper').innerHTML = html;
+                    bindPaginationLinks();
+                    try { if (window.feather && typeof window.feather.replace === 'function') window.feather.replace(); } catch (err) { }
+                }).catch(e => {
+                    console.error(e);
+                });
+        }
+
+        function bindPaginationLinks(){
+            const wrapper = document.getElementById('recipientsTableWrapper');
+            if (!wrapper) return;
+            wrapper.querySelectorAll('a[href]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (!href) return;
+                const url = new URL(href, location.origin);
+                if (url.searchParams.has('page')) {
+                    a.addEventListener('click', function(ev){ ev.preventDefault(); ajaxFetchRecipients(url.searchParams.get('page')); });
+                }
+            });
+        }
+
+        window.addEventListener('load', function(){
+            bindPaginationLinks();
+        });
+    </script>
+@endsection
             <div style="padding:40px;text-align:center;color:#6b7280;">
                 <svg style="margin:0 auto 16px;opacity:0.5;" width="64" height="64" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
@@ -259,4 +326,16 @@
     @endif
 
     @include('partials.confirmation-modal')
+
+    <script>
+        // Debounced search for recipients
+        let __recipientSearchTimer = null;
+        function debouncedRecipientSearch() {
+            clearTimeout(__recipientSearchTimer);
+            __recipientSearchTimer = setTimeout(() => {
+                const form = document.getElementById('recipientSearchForm');
+                if (form) form.submit();
+            }, 300);
+        }
+    </script>
 @endsection

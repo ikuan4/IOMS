@@ -13,13 +13,12 @@ class ContractTypeController extends Controller
     /**
      * List contract types with pagination + search + status filter
      */
-    public function index(Request $request)
+    public function index(Request $request): mixed
     {
-        if (!Auth::user()->hasPermission('contract-types.view')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.view')) {
             abort(403, 'Unauthorized action.');
         }
-
-        $user = Auth::user();
         $search = $request->query('search');
         $status = $request->query('status', 'all');
 
@@ -69,6 +68,12 @@ class ContractTypeController extends Controller
 
         $contractTypes = $query->paginate(10)->withQueryString();
 
+        if ($request->ajax()) {
+            /** @var view-string $view */
+            $view = 'contract-types._contract_types_table';
+            return view($view, compact('contractTypes'));
+        }
+
         return view('contract-types.index', compact(
             'contractTypes',
             'search',
@@ -80,9 +85,10 @@ class ContractTypeController extends Controller
     /**
      * Show create form
      */
-    public function create()
+    public function create(): mixed
     {
-        if (!Auth::user()->hasPermission('contract-types.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -94,14 +100,16 @@ class ContractTypeController extends Controller
     /**
      * Store new contract type
      */
-    public function store(Request $request)
+    public function store(Request $request): mixed
     {
-        if (!Auth::user()->hasPermission('contract-types.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.create')) {
             abort(403, 'Unauthorized action.');
         }
-
-        $user = Auth::user();
         $branchId = $user->branch_id;
+        if ($branchId === null) {
+            return back()->withErrors(['branch_id' => 'User branch is not set.']);
+        }
 
         $data = $request->validate([
             'name' => [
@@ -116,16 +124,27 @@ class ContractTypeController extends Controller
         ]);
 
         // Generate unique code
-        $code = ContractType::generateCode($data['name'], $branchId);
+        $code = ContractType::generateCode($data['name'], (int) $branchId);
 
         $contractType = new ContractType();
-        $contractType->branch_id = $branchId;
+        $contractType->branch_id = (int) $branchId;
         $contractType->name = $data['name'];
         $contractType->description = $data['description'] ?? null;
         $contractType->code = $code;
         $contractType->is_active = $request->boolean('is_active', true);
-        $contractType->created_by = Auth::id();
-        $contractType->updated_by = Auth::id();
+        $userId = Auth::id();
+        /** @var int<0, max>|null $userIdInt */
+        $userIdInt = null;
+        if (is_int($userId)) {
+            $userIdInt = $userId;
+        } elseif (is_string($userId) && ctype_digit($userId)) {
+            $userIdInt = (int) $userId;
+        }
+        if ($userIdInt !== null && $userIdInt < 0) {
+            $userIdInt = null;
+        }
+        $contractType->created_by = $userIdInt;
+        $contractType->updated_by = $userIdInt;
         $contractType->save();
 
         return redirect()
@@ -136,14 +155,15 @@ class ContractTypeController extends Controller
     /**
      * Edit form
      */
-    public function edit(ContractType $contractType)
+    public function edit(ContractType $contractType): mixed
     {
-        if (!auth()->user()->hasPermission('contract-types.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Ensure user can only edit contract types from their branch
-        if (!auth()->user()->isSuperAdmin() && $contractType->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contractType->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -153,14 +173,15 @@ class ContractTypeController extends Controller
     /**
      * Update existing contract type
      */
-    public function update(Request $request, ContractType $contractType)
+    public function update(Request $request, ContractType $contractType): mixed
     {
-        if (!auth()->user()->hasPermission('contract-types.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Ensure user can only edit contract types from their branch
-        if (!auth()->user()->isSuperAdmin() && $contractType->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contractType->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -186,7 +207,18 @@ class ContractTypeController extends Controller
             $contractType->code = ContractType::generateCode($data['name'], $contractType->branch_id, $contractType->id);
         }
 
-        $contractType->updated_by = auth()->id();
+        $userId = Auth::id();
+        /** @var int<0, max>|null $userIdInt */
+        $userIdInt = null;
+        if (is_int($userId)) {
+            $userIdInt = $userId;
+        } elseif (is_string($userId) && ctype_digit($userId)) {
+            $userIdInt = (int) $userId;
+        }
+        if ($userIdInt !== null && $userIdInt < 0) {
+            $userIdInt = null;
+        }
+        $contractType->updated_by = $userIdInt;
         $contractType->save();
 
         return redirect()
@@ -197,14 +229,15 @@ class ContractTypeController extends Controller
     /**
      * Soft delete contract type
      */
-    public function destroy(ContractType $contractType)
+    public function destroy(ContractType $contractType): mixed
     {
-        if (!auth()->user()->hasPermission('contract-types.delete')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.delete')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Ensure user can only delete contract types from their branch
-        if (!auth()->user()->isSuperAdmin() && $contractType->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contractType->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -219,23 +252,35 @@ class ContractTypeController extends Controller
     /**
      * Restore a soft-deleted contract type
      */
-    public function restore(Request $request, $id)
+    public function restore(Request $request, int|string $id): mixed
     {
-        if (!auth()->user()->hasPermission('contract-types.restore')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.restore')) {
             abort(403, 'Unauthorized action.');
         }
 
         $contractType = ContractType::withTrashed()->findOrFail($id);
 
         // Ensure user can only restore contract types from their branch
-        if (!auth()->user()->isSuperAdmin() && $contractType->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contractType->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
         if ($contractType->trashed()) {
             $contractType->restoreWithUser();
             $contractType->is_active = true;
-            $contractType->updated_by = auth()->id();
+            $userId = Auth::id();
+            /** @var int<0, max>|null $userIdInt */
+            $userIdInt = null;
+            if (is_int($userId)) {
+                $userIdInt = $userId;
+            } elseif (is_string($userId) && ctype_digit($userId)) {
+                $userIdInt = (int) $userId;
+            }
+            if ($userIdInt !== null && $userIdInt < 0) {
+                $userIdInt = null;
+            }
+            $contractType->updated_by = $userIdInt;
             $contractType->save();
 
             $message = 'Contract type "' . $contractType->name . '" restored successfully.';

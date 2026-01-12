@@ -13,6 +13,11 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         // Check and drop FK constraints if they exist
         $this->dropForeignKeyIfExists('branches', 'branches_created_by_foreign');
         $this->dropForeignKeyIfExists('branches', 'branches_updated_by_foreign');
@@ -25,6 +30,11 @@ return new class extends Migration
      */
     public function down(): void
     {
+        $driver = Schema::getConnection()->getDriverName();
+        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
+            return;
+        }
+
         Schema::table('branches', function (Blueprint $table) {
             if (!$this->foreignKeyExists('branches', 'branches_created_by_foreign')) {
                 $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
@@ -56,6 +66,10 @@ return new class extends Migration
     private function foreignKeyExists(string $table, string $foreignKey): bool
     {
         $conn = Schema::getConnection();
+        $driver = $conn->getDriverName();
+        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
+            return false;
+        }
         $dbName = $conn->getDatabaseName();
 
         $exists = DB::select(

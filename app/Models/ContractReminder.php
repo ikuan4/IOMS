@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -36,8 +37,11 @@ class ContractReminder extends Model
 
     /**
      * Scope to filter unsent reminders
+     *
+     * @param Builder<ContractReminder> $query
+     * @return Builder<ContractReminder>
      */
-    public function scopeUnsent($query)
+    public function scopeUnsent(Builder $query): Builder
     {
         return $query->where('is_sent', false);
     }

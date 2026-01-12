@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -207,8 +208,11 @@ class Contract extends Model
 
     /**
      * Scope to filter by ongoing contracts
+     *
+     * @param Builder<Contract> $query
+     * @return Builder<Contract>
      */
-    public function scopeOngoing($query)
+    public function scopeOngoing(Builder $query): Builder
     {
         return $query->where('is_active', true);
     }

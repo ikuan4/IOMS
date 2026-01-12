@@ -14,6 +14,7 @@ parameters:
     - vendor/*
     - storage/*
     - bootstrap/cache/*
+    - app/Http/Controllers/ContractController_backup.php
 
   # Suppress specific known false-positive categories from Larastan/PHPStan
   ignoreErrors:

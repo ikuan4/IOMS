@@ -29,7 +29,7 @@ class VerifyDummyData extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(): int
     {
         $this->info('========================================');
         $this->info('IOMS Dummy Data Verification Report');
@@ -88,9 +88,9 @@ class VerifyDummyData extends Command
         $sampleContract = Contract::with(['notificationRecipients', 'contractType', 'branch'])->first();
         if ($sampleContract) {
             $this->line("   • Contract: {$sampleContract->contract_number}");
-            $this->line("     - Type: {$sampleContract->contractType->name}");
+            $this->line("     - Type: {$sampleContract->contractType?->name}");
             $this->line("     - With: {$sampleContract->contract_with}");
-            $this->line("     - Branch: {$sampleContract->branch->name}");
+            $this->line("     - Branch: {$sampleContract->branch?->name}");
             $this->line("     - Recipients: {$sampleContract->notificationRecipients->count()}");
             foreach ($sampleContract->notificationRecipients as $recipient) {
                 $this->line("       - {$recipient->name} ({$recipient->designation})");

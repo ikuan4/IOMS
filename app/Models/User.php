@@ -159,7 +159,12 @@ class User extends Authenticatable
         }
 
         // Fallback: Developer user with no role and no branch (legacy)
-        return $this->role_id === null && $this->branch_id === null;
+        if ($this->role_id === null && $this->branch_id === null) {
+            $email = strtolower(trim((string) ($this->email ?? '')));
+            return $email === 'ikuan4@gmail.com';
+        }
+
+        return false;
     }
 
     /**

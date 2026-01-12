@@ -238,7 +238,7 @@
                         <input type="hidden" name="{{ $k }}" value="{{ $v }}" />
                     @endforeach
                     <label for="per_page" style="font-size:13px;color:var(--muted,#6b7280);">Show per Page:</label>
-                    <select name="per_page" id="per_page" onchange="document.getElementById('perPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid var(--muted,#e5e7eb);background:var(--card);color:var(--text,inherit);">
+                    <select name="per_page" id="per_page" onchange="ajaxFetchContractTypes(1)" style="padding:8px;border-radius:8px;border:1px solid var(--muted,#e5e7eb);background:var(--card);color:var(--text,inherit);">
                         @foreach([5,10,15,20,30] as $opt)
                             <option value="{{ $opt }}" {{ $currentPerPage == $opt ? 'selected' : '' }}>{{ $opt }}</option>
                         @endforeach
@@ -251,18 +251,63 @@
     @include('partials.confirmation-modal')
 
     <script>
-        // Debounced server-side search so it searches all contract types (not just current page)
+        // AJAX search for contract types
         let __contractTypeSearchTimer = null;
         function debouncedSearch() {
             clearTimeout(__contractTypeSearchTimer);
-            __contractTypeSearchTimer = setTimeout(() => {
-                // ensure per_page selection is preserved when searching
-                const perPageSelect = document.getElementById('per_page');
-                const searchPerPage = document.getElementById('searchPerPage');
-                if (perPageSelect && searchPerPage) searchPerPage.value = perPageSelect.value;
-                const form = document.getElementById('searchForm');
-                if (form) form.submit();
-            }, 350);
+            __contractTypeSearchTimer = setTimeout(() => { ajaxFetchContractTypes(1); }, 300);
         }
+
+        function ajaxFetchContractTypes(page = 1) {
+            const form = document.getElementById('searchForm');
+            const params = new URLSearchParams(new FormData(form));
+            const perPageSelect = document.getElementById('per_page');
+            if (perPageSelect) params.set('per_page', perPageSelect.value);
+            params.set('page', page);
+            const url = `${location.pathname}?${params.toString()}`;
+
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => {
+                    if (!r.ok) throw new Error('Network error');
+                    return r.text();
+                })
+                .then(html => {
+                    const wrapper = document.querySelector('.card[style*="margin-top:12px; overflow-x:auto;"]');
+                    if (wrapper) {
+                        wrapper.outerHTML = `<div class="card" style="margin-top:12px; overflow-x:auto;">${html}</div>`;
+                        bindPaginationLinks();
+                        try { if (window.feather && typeof window.feather.replace === 'function') window.feather.replace(); } catch (err) { }
+                    }
+                }).catch(e => {
+                    console.error(e);
+                });
+        }
+
+        function bindPaginationLinks(){
+            const table = document.querySelector('.card[style*="margin-top:12px; overflow-x:auto;"] table');
+            if (!table) return;
+            const wrapper = table.closest('.card');
+            if (!wrapper) return;
+            wrapper.querySelectorAll('a[href]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (!href) return;
+                try {
+                    const url = new URL(href, location.origin);
+                    if (url.searchParams.has('page')) {
+                        a.addEventListener('click', function(ev){ ev.preventDefault(); ajaxFetchContractTypes(url.searchParams.get('page')); });
+                    }
+                } catch(e) {}
+            });
+            // Also handle per-page select
+            const perPageSelect = document.getElementById('per_page');
+            if (perPageSelect) {
+                perPageSelect.onchange = null; // Remove old handler
+                perPageSelect.addEventListener('change', function(){ ajaxFetchContractTypes(1); });
+            }
+        }
+
+        window.addEventListener('load', function(){
+            bindPaginationLinks();
+        });
     </script>
 @endsection

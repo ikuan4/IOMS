@@ -61,6 +61,22 @@ return new class extends Migration
     private function indexExists(string $table, string $index): bool
     {
         $conn = Schema::getConnection();
+        $driver = $conn->getDriverName();
+
+        if ($driver === 'sqlite') {
+            $rows = DB::select("PRAGMA index_list('$table')");
+            foreach ($rows as $row) {
+                if (isset($row->name) && $row->name === $index) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
+            return false;
+        }
+
         $dbName = $conn->getDatabaseName();
 
         // Use raw query instead of Doctrine

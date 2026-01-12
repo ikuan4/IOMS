@@ -58,7 +58,9 @@ class UserController extends Controller
         $this->authorize('viewAny', User::class);
 
         $currentUser = Auth::user();
-        assert($currentUser instanceof User);
+        if (!$currentUser) {
+            abort(403);
+        }
 
         $search  = (string) $request->query('search');
         $status  = $request->query('status', 'all');
@@ -71,7 +73,8 @@ class UserController extends Controller
 
         // Enforce hierarchy: users can only see users with lower hierarchy (higher priority number)
         if (!$currentUser->isSuperAdmin()) {
-            $myPriority = $currentUser->effectiveRole()?->priority ?? 999;
+            $effectiveRole = $currentUser->effectiveRole();
+            $myPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
 
             $query->where('branch_id', $currentUser->branch_id)
                 ->where(function($q) use ($myPriority) {
@@ -103,7 +106,8 @@ class UserController extends Controller
         // Build base query for counts with same hierarchy restrictions
         $baseCountQuery = User::query();
         if (!$currentUser->isSuperAdmin()) {
-            $myPriority = $currentUser->effectiveRole()?->priority ?? 999;
+            $effectiveRole = $currentUser->effectiveRole();
+            $myPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
             $baseCountQuery->where('branch_id', $currentUser->branch_id)
                 ->where(function($q) use ($myPriority) {
                     $q->whereHas('role', function($roleQuery) use ($myPriority) {
@@ -119,6 +123,12 @@ class UserController extends Controller
             'deactivated' => (clone $baseCountQuery)->whereNull('deleted_at')->where('active', false)->count(),
             'deleted'     => (clone $baseCountQuery)->onlyTrashed()->count(),
         ];
+
+        if ($request->ajax()) {
+            /** @var view-string $view */
+            $view = 'users._users_table';
+            return view($view, compact('users'));
+        }
 
         return view('users.index', compact('users', 'search', 'status', 'statusCounts'));
     }
@@ -149,6 +159,15 @@ class UserController extends Controller
     {
         $this->authorize('create', User::class);
 
+        $actorId = Auth::id();
+        /** @var int<0, max>|null $actorIdInt */
+        $actorIdInt = null;
+        if (is_int($actorId)) {
+            $actorIdInt = $actorId;
+        } elseif (is_string($actorId) && ctype_digit($actorId)) {
+            $actorIdInt = (int) $actorId;
+        }
+
         $data = $request->validate([
             'name'      => ['required', 'string', 'max:255'],
             'mobile'    => ['required', 'string', 'max:50', 'unique:users,mobile'],
@@ -172,6 +191,10 @@ class UserController extends Controller
         $requestedBranchId = $request->input('branch_id') ?? null;
         $currentUser = Auth::user();
 
+        if (!$currentUser) {
+            abort(403);
+        }
+
         if ($requestedBranchId !== null && $role instanceof Role) {
             if (!$currentUser->isSuperAdmin() && $role->branch_id !== null && $role->branch_id != $requestedBranchId) {
                 return back()->withInput()->with('error', 'Selected role belongs to a different branch.');
@@ -179,14 +202,14 @@ class UserController extends Controller
         }
 
         // Strict validation: user branch must match role branch (unless role has no branch)
-        if ($role instanceof Role && $role->branch_id !== null && $requestedBranchId !== null) {
+        if (!$currentUser->isSuperAdmin() && $role instanceof Role && $role->branch_id !== null && $requestedBranchId !== null) {
             if ($role->branch_id != $requestedBranchId) {
                 return back()->withInput()->with('error', 'User branch must match role branch.');
             }
         }
 
         // Use transaction with role status re-check to prevent race conditions
-        return DB::transaction(function () use ($request, $data, $role) {
+        return DB::transaction(function () use ($request, $data, $role, $actorIdInt) {
             // Re-check role status inside transaction
             $role = Role::withTrashed()->lockForUpdate()->find($data['role_id']);
 
@@ -199,7 +222,7 @@ class UserController extends Controller
             $user = new User($data);
             $user->password   = Hash::make($data['password']);
             $user->active     = $request->boolean('active', true);
-            $user->created_by = optional(Auth::user())->id;
+            $user->created_by = $actorIdInt;
 
             if ($request->hasFile('avatar')) {
                 $path = $request->file('avatar')->store('avatars', 'public');
@@ -239,6 +262,15 @@ class UserController extends Controller
     {
         $this->authorize('update', $user);
 
+        $actorId = Auth::id();
+        /** @var int<0, max>|null $actorIdInt */
+        $actorIdInt = null;
+        if (is_int($actorId)) {
+            $actorIdInt = $actorId;
+        } elseif (is_string($actorId) && ctype_digit($actorId)) {
+            $actorIdInt = (int) $actorId;
+        }
+
         $data = $request->validate([
             'name'     => ['required', 'string', 'max:255'],
             'mobile'   => ['required', Rule::unique('users')->ignore($user->id)],
@@ -255,6 +287,10 @@ class UserController extends Controller
         $requestedBranchId = $request->input('branch_id') ?? null;
         $currentUser = Auth::user();
 
+        if (!$currentUser) {
+            abort(403);
+        }
+
         if ($requestedBranchId !== null && $role instanceof Role) {
             if (!$currentUser->isSuperAdmin() && $role->branch_id !== null && $role->branch_id != $requestedBranchId) {
                 return back()->withInput()->with('error', 'Selected role belongs to a different branch.');
@@ -262,7 +298,7 @@ class UserController extends Controller
         }
 
         // Strict validation: user branch must match role branch (unless role has no branch)
-        if ($role instanceof Role && $role->branch_id !== null && $requestedBranchId !== null) {
+        if (!$currentUser->isSuperAdmin() && $role instanceof Role && $role->branch_id !== null && $requestedBranchId !== null) {
             if ($role->branch_id != $requestedBranchId) {
                 return back()->withInput()->with('error', 'User branch must match role branch.');
             }
@@ -271,14 +307,14 @@ class UserController extends Controller
         $roleName = strtolower(trim($this->roleName($role) ?? ''));
         $isDevRole = $roleName === 'developer';
 
-        $currentRoleName = strtolower(trim($this->roleName(optional(Auth::user())->role) ?? ''));
+        $currentRoleName = strtolower(trim($this->roleName($currentUser->role) ?? ''));
 
         if ($isDevRole && $currentRoleName !== 'developer') {
             return back()->withInput()->with('error', 'You cannot assign Developer role.');
         }
 
         // Use transaction with role status re-check
-        return DB::transaction(function () use ($request, $data, $user, $role) {
+        return DB::transaction(function () use ($request, $data, $user, $role, $actorIdInt) {
             // Re-check role status inside transaction
             $role = Role::withTrashed()->lockForUpdate()->find($data['role_id']);
 
@@ -286,6 +322,22 @@ class UserController extends Controller
             if ($request->boolean('active', false)) {
                 if ($role instanceof Role && ($role->trashed() || ! $this->roleIsActive($role))) {
                     return back()->withInput()->with('error', 'Cannot activate user because the selected role is inactive or deleted.');
+                }
+
+                // Also block activation if any pivot-assigned roles are inactive/trashed
+                $pivotRoleIds = DB::table('model_has_roles')
+                    ->where('model_type', User::class)
+                    ->where('model_id', $user->id)
+                    ->pluck('role_id')
+                    ->all();
+
+                if (is_array($pivotRoleIds) && count($pivotRoleIds) > 0) {
+                    $pivotRoles = Role::withTrashed()->whereIn('id', $pivotRoleIds)->get();
+                    foreach ($pivotRoles as $pivotRole) {
+                        if ($pivotRole->trashed() || ! $this->roleIsActive($pivotRole)) {
+                            return back()->withInput()->with('error', 'Cannot activate user because one or more assigned roles are inactive or deleted.');
+                        }
+                    }
                 }
                 }
 
@@ -297,7 +349,7 @@ class UserController extends Controller
                 $user->password = Hash::make($data['password']);
             }
 
-            $user->updated_by = optional(Auth::user())->id;
+            $user->updated_by = $actorIdInt;
             $user->save();
 
             return redirect()->route('users.index')
@@ -312,7 +364,16 @@ class UserController extends Controller
     {
         $this->authorize('delete', $user);
 
-        $user->deleted_by = optional(Auth::user())->id;
+        $actorId = Auth::id();
+        /** @var int<0, max>|null $actorIdInt */
+        $actorIdInt = null;
+        if (is_int($actorId)) {
+            $actorIdInt = $actorId;
+        } elseif (is_string($actorId) && ctype_digit($actorId)) {
+            $actorIdInt = (int) $actorId;
+        }
+
+        $user->deleted_by = $actorIdInt;
         $user->save();
         $user->delete();
 
@@ -325,6 +386,10 @@ class UserController extends Controller
     public function editProfile(): View
     {
         $user = Auth::user();
+
+        if (!$user) {
+            abort(403);
+        }
 
         // Only allow if user is developer (no role_id and no branch_id)
         if (!$user->isSuperAdmin()) {
@@ -340,6 +405,10 @@ class UserController extends Controller
     public function updateProfile(Request $request): RedirectResponse
     {
         $user = Auth::user();
+
+        if (!$user) {
+            abort(403);
+        }
 
         // Only allow if user is developer (no role_id and no branch_id)
         if (!$user->isSuperAdmin()) {
@@ -421,7 +490,17 @@ class UserController extends Controller
         }
 
         $user->restore();
-        $user->restored_by = optional(Auth::user())->id;
+
+        $actorId = Auth::id();
+        /** @var int<0, max>|null $actorIdInt */
+        $actorIdInt = null;
+        if (is_int($actorId)) {
+            $actorIdInt = $actorId;
+        } elseif (is_string($actorId) && ctype_digit($actorId)) {
+            $actorIdInt = (int) $actorId;
+        }
+
+        $user->restored_by = $actorIdInt;
         $user->save();
 
         return back()->with('status', 'User restored successfully.');

@@ -134,6 +134,13 @@ class RoleController extends Controller
             return response()->json($mapped);
         }
 
+        // Handle regular table AJAX requests
+        if ($request->ajax() && !$roleId) {
+            /** @var view-string $view */
+            $view = 'roles._roles_table';
+            return view($view, compact('roles'));
+        }
+
         return view('roles.index', compact('roles', 'statusCounts'));
     }
 
@@ -418,7 +425,8 @@ class RoleController extends Controller
             $selectedBranchId = $currentUser->branch_id;
 
             // Get user's priority (lower number = higher privilege)
-            $userPriority = $currentUser->effectiveRole()?->priority ?? 999;
+            $effectiveRole = $currentUser->effectiveRole();
+            $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
 
             // User can only see roles with priority > their own (lower privilege/higher number)
             // This excludes their own role and any roles with higher privilege
@@ -460,7 +468,8 @@ class RoleController extends Controller
             $updatedCount = 0;
 
             // Get current user's priority for validation
-            $userPriority = $currentUser->effectiveRole()?->priority ?? 999;
+            $effectiveRole = $currentUser->effectiveRole();
+            $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
 
             \Log::info('Processing priorities', ['priorities' => $priorities, 'count' => count($priorities), 'userPriority' => $userPriority]);
 

@@ -12,13 +12,12 @@ class NotificationRecipientController extends Controller
     /**
      * Display a listing of notification recipients with filters and search
      */
-    public function index(Request $request)
+    public function index(Request $request): mixed
     {
-        if (!auth()->user()->hasPermission('notification-recipients.view')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.view')) {
             abort(403, 'Unauthorized action.');
         }
-
-        $user = Auth::user();
         $search = $request->query('search');
         $status = $request->query('status', 'all');
 
@@ -64,6 +63,10 @@ class NotificationRecipientController extends Controller
 
         $recipients = $query->paginate(10)->appends($request->query());
 
+        if ($request->ajax()) {
+            return view('notification-recipients._recipients_table', compact('recipients'));
+        }
+
         return view('notification-recipients.index', compact(
             'recipients',
             'search',
@@ -75,9 +78,10 @@ class NotificationRecipientController extends Controller
     /**
      * Show the form for creating a new recipient
      */
-    public function create()
+    public function create(): mixed
     {
-        if (!auth()->user()->hasPermission('notification-recipients.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -88,9 +92,10 @@ class NotificationRecipientController extends Controller
     /**
      * Store a newly created recipient in storage
      */
-    public function store(Request $request)
+    public function store(Request $request): mixed
     {
-        if (!Auth::user()->hasPermission('notification-recipients.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -103,17 +108,20 @@ class NotificationRecipientController extends Controller
         ]);
 
         $userId = Auth::id();
-        $user = Auth::user();
+        $branchId = $user->branch_id;
+        if ($branchId === null) {
+            return back()->withErrors(['branch_id' => 'User branch is not set.']);
+        }
 
         $recipient = NotificationRecipient::create([
-            'branch_id' => $user->branch_id,
+            'branch_id' => (int) $branchId,
             'name' => $data['name'],
             'designation' => $data['designation'],
             'email' => $data['email'] ?? null,
             'mobile' => $data['mobile'] ?? null,
             'is_active' => $request->boolean('is_active', true),
-            'created_by' => $userId,
-            'updated_by' => $userId,
+            'created_by' => $userId ? (int) $userId : null,
+            'updated_by' => $userId ? (int) $userId : null,
         ]);
 
         return redirect()
@@ -124,14 +132,15 @@ class NotificationRecipientController extends Controller
     /**
      * Display the specified recipient
      */
-    public function show(NotificationRecipient $notificationRecipient)
+    public function show(NotificationRecipient $notificationRecipient): mixed
     {
-        if (!auth()->user()->hasPermission('notification-recipients.view')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.view')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Ensure user can only view recipients from their branch
-        if (!auth()->user()->isSuperAdmin() && $notificationRecipient->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $notificationRecipient->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -143,14 +152,15 @@ class NotificationRecipientController extends Controller
     /**
      * Show the form for editing the specified recipient
      */
-    public function edit(NotificationRecipient $notificationRecipient)
+    public function edit(NotificationRecipient $notificationRecipient): mixed
     {
-        if (!auth()->user()->hasPermission('notification-recipients.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Ensure user can only edit recipients from their branch
-        if (!auth()->user()->isSuperAdmin() && $notificationRecipient->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $notificationRecipient->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -160,14 +170,15 @@ class NotificationRecipientController extends Controller
     /**
      * Update the specified recipient in storage
      */
-    public function update(Request $request, NotificationRecipient $notificationRecipient)
+    public function update(Request $request, NotificationRecipient $notificationRecipient): mixed
     {
-        if (!auth()->user()->hasPermission('notification-recipients.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Ensure user can only edit recipients from their branch
-        if (!auth()->user()->isSuperAdmin() && $notificationRecipient->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $notificationRecipient->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -185,7 +196,7 @@ class NotificationRecipientController extends Controller
             'email' => $data['email'] ?? null,
             'mobile' => $data['mobile'] ?? null,
             'is_active' => $request->boolean('is_active'),
-            'updated_by' => Auth::id(),
+            'updated_by' => ($id = Auth::id()) ? (int) $id : null,
         ]);
 
         return redirect()
@@ -196,14 +207,15 @@ class NotificationRecipientController extends Controller
     /**
      * Remove the specified recipient from storage
      */
-    public function destroy(NotificationRecipient $notificationRecipient)
+    public function destroy(NotificationRecipient $notificationRecipient): mixed
     {
-        if (!auth()->user()->hasPermission('notification-recipients.delete')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.delete')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Ensure user can only delete recipients from their branch
-        if (!auth()->user()->isSuperAdmin() && $notificationRecipient->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $notificationRecipient->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -218,23 +230,35 @@ class NotificationRecipientController extends Controller
     /**
      * Restore a soft-deleted recipient
      */
-    public function restore(Request $request, $id)
+    public function restore(Request $request, int|string $id): mixed
     {
-        if (!auth()->user()->hasPermission('notification-recipients.restore')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('notification-recipients.restore')) {
             abort(403, 'Unauthorized action.');
         }
 
         $recipient = NotificationRecipient::withTrashed()->findOrFail($id);
 
         // Ensure user can only restore recipients from their branch
-        if (!auth()->user()->isSuperAdmin() && $recipient->branch_id !== auth()->user()->branch_id) {
+        if (!$user->isSuperAdmin() && $recipient->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
         if ($recipient->trashed()) {
             $recipient->restoreWithUser();
             $recipient->is_active = true;
-            $recipient->updated_by = auth()->id();
+            $userId = Auth::id();
+            /** @var int<0, max>|null $userIdInt */
+            $userIdInt = null;
+            if (is_int($userId)) {
+                $userIdInt = $userId;
+            } elseif (is_string($userId) && ctype_digit($userId)) {
+                $userIdInt = (int) $userId;
+            }
+            if ($userIdInt !== null && $userIdInt < 0) {
+                $userIdInt = null;
+            }
+            $recipient->updated_by = $userIdInt;
             $recipient->save();
 
             $message = 'Notification recipient "' . $recipient->name . '" restored successfully.';

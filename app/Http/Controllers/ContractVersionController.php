@@ -17,14 +17,15 @@ class ContractVersionController extends Controller
     /**
      * Show form to create a new version for the contract
      */
-    public function create(Contract $contract)
+    public function create(Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.create')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -37,14 +38,15 @@ class ContractVersionController extends Controller
     /**
      * Store a new version for the contract
      */
-    public function store(Request $request, Contract $contract)
+    public function store(Request $request, Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.create')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -62,10 +64,8 @@ class ContractVersionController extends Controller
             $nextVersion = $maxVersion + 1;
 
             // Convert IST to UTC for storage
-            $startUtc = Carbon::createFromFormat('Y-m-d', $validated['start_date'], 'Asia/Kolkata')
-                ->setTimezone('UTC');
-            $endUtc = Carbon::createFromFormat('Y-m-d', $validated['end_date'], 'Asia/Kolkata')
-                ->setTimezone('UTC');
+            $startUtc = Carbon::parse($validated['start_date'], 'Asia/Kolkata')->setTimezone('UTC');
+            $endUtc = Carbon::parse($validated['end_date'], 'Asia/Kolkata')->setTimezone('UTC');
 
             // Create new version
             $version = ContractVersion::create([
@@ -74,22 +74,37 @@ class ContractVersionController extends Controller
                 'start_date'      => $startUtc,
                 'end_date'        => $endUtc,
                 'description'     => $validated['description'] ?? null,
-                'created_by'      => Auth::id(),
-                'updated_by'      => Auth::id(),
+                'created_by'      => ($id = Auth::id()) ? (int) $id : null,
+                'updated_by'      => ($id = Auth::id()) ? (int) $id : null,
             ]);
 
             // Handle file uploads
             if ($request->hasFile('files')) {
-                foreach ($request->file('files') as $file) {
-                    // Store file
-                    $path = $file->store('contracts', 'private');
-                    $storedFile = StoredFile::create([
-                        'file_path'       => $path,
-                        'original_name'   => $file->getClientOriginalName(),
-                        'file_size'       => $file->getSize(),
-                        'mime_type'       => $file->getMimeType(),
-                        'uploaded_by'     => Auth::id(),
-                    ]);
+                foreach ((array) $request->file('files') as $file) {
+                    if (!$file || !$file->isValid()) {
+                        continue;
+                    }
+
+                    $sha256 = hash_file('sha256', $file->getRealPath());
+
+                    $storedFile = StoredFile::where('branch_id', $contract->branch_id)
+                        ->where('sha256', $sha256)
+                        ->first();
+
+                    if (!$storedFile) {
+                        // Store file
+                        $path = $file->store("branches/{$contract->branch_id}/contracts", 'local');
+
+                        $storedFile = StoredFile::create([
+                            'branch_id' => $contract->branch_id,
+                            'disk' => 'local',
+                            'path' => $path,
+                            'original_filename' => $file->getClientOriginalName(),
+                            'mime_type' => $file->getMimeType(),
+                            'size_bytes' => $file->getSize(),
+                            'sha256' => $sha256,
+                        ]);
+                    }
 
                     // Link file to version
                     ContractVersionFile::create([
@@ -116,16 +131,20 @@ class ContractVersionController extends Controller
     /**
      * Show form to edit an existing version
      */
-    public function edit(ContractVersion $version)
+    public function edit(ContractVersion $version): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         $contract = $version->contract;
+        if (!$contract) {
+            abort(404);
+        }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -138,16 +157,20 @@ class ContractVersionController extends Controller
     /**
      * Update an existing version
      */
-    public function update(Request $request, ContractVersion $version)
+    public function update(Request $request, ContractVersion $version): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         $contract = $version->contract;
+        if (!$contract) {
+            abort(404);
+        }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -163,29 +186,30 @@ class ContractVersionController extends Controller
         DB::beginTransaction();
         try {
             // Convert IST to UTC for storage
-            $startUtc = Carbon::createFromFormat('Y-m-d', $validated['start_date'], 'Asia/Kolkata')
-                ->setTimezone('UTC');
-            $endUtc = Carbon::createFromFormat('Y-m-d', $validated['end_date'], 'Asia/Kolkata')
-                ->setTimezone('UTC');
+            $startUtc = Carbon::parse($validated['start_date'], 'Asia/Kolkata')->setTimezone('UTC');
+            $endUtc = Carbon::parse($validated['end_date'], 'Asia/Kolkata')->setTimezone('UTC');
 
             // Update version
             $version->update([
                 'start_date'  => $startUtc,
                 'end_date'    => $endUtc,
                 'description' => $validated['description'] ?? null,
-                'updated_by'  => Auth::id(),
+                'updated_by'  => ($id = Auth::id()) ? (int) $id : null,
             ]);
 
             // Handle file removals
             if (!empty($validated['remove_files'])) {
                 foreach ($validated['remove_files'] as $fileId) {
-                    if (empty($fileId)) continue;
+                    if (empty($fileId) || !is_numeric($fileId)) {
+                        continue;
+                    }
 
-                    $versionFile = ContractVersionFile::find($fileId);
+                    /** @var ContractVersionFile|null $versionFile */
+                    $versionFile = ContractVersionFile::find((int) $fileId);
                     if ($versionFile && $versionFile->contract_version_id === $version->id) {
                         // Delete from storage
                         if ($versionFile->storedFile) {
-                            Storage::disk('private')->delete($versionFile->storedFile->file_path);
+                            Storage::disk($versionFile->storedFile->disk)->delete($versionFile->storedFile->path);
                             $versionFile->storedFile->delete();
                         }
                         $versionFile->delete();
@@ -195,16 +219,31 @@ class ContractVersionController extends Controller
 
             // Handle new file uploads
             if ($request->hasFile('files')) {
-                foreach ($request->file('files') as $file) {
-                    // Store file
-                    $path = $file->store('contracts', 'private');
-                    $storedFile = StoredFile::create([
-                        'file_path'       => $path,
-                        'original_name'   => $file->getClientOriginalName(),
-                        'file_size'       => $file->getSize(),
-                        'mime_type'       => $file->getMimeType(),
-                        'uploaded_by'     => Auth::id(),
-                    ]);
+                foreach ((array) $request->file('files') as $file) {
+                    if (!$file || !$file->isValid()) {
+                        continue;
+                    }
+
+                    $sha256 = hash_file('sha256', $file->getRealPath());
+
+                    $storedFile = StoredFile::where('branch_id', $contract->branch_id)
+                        ->where('sha256', $sha256)
+                        ->first();
+
+                    if (!$storedFile) {
+                        // Store file
+                        $path = $file->store("branches/{$contract->branch_id}/contracts", 'local');
+
+                        $storedFile = StoredFile::create([
+                            'branch_id' => $contract->branch_id,
+                            'disk' => 'local',
+                            'path' => $path,
+                            'original_filename' => $file->getClientOriginalName(),
+                            'mime_type' => $file->getMimeType(),
+                            'size_bytes' => $file->getSize(),
+                            'sha256' => $sha256,
+                        ]);
+                    }
 
                     // Link file to version
                     ContractVersionFile::create([
@@ -231,13 +270,17 @@ class ContractVersionController extends Controller
     /**
      * Soft delete a version
      */
-    public function destroy(ContractVersion $version)
+    public function destroy(ContractVersion $version): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.delete')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.delete')) {
             abort(403, 'Unauthorized action.');
         }
 
         $contract = $version->contract;
+        if (!$contract) {
+            abort(404);
+        }
 
         \Log::info('Version deletion started', [
             'version_id' => $version->id,
@@ -247,7 +290,7 @@ class ContractVersionController extends Controller
         ]);
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -278,21 +321,25 @@ class ContractVersionController extends Controller
     /**
      * Restore a soft-deleted version
      */
-    public function restore($id)
+    public function restore(int|string $id): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.restore')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.restore')) {
             abort(403, 'Unauthorized action.');
         }
 
         $version = ContractVersion::onlyTrashed()->findOrFail($id);
         $contract = $version->contract;
+        if (!$contract) {
+            abort(404);
+        }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
-        $version->update(['restored_by' => Auth::id()]);
+        $version->update(['restored_by' => ($id = Auth::id()) ? (int) $id : null]);
         $version->restore();
 
         return redirect()
@@ -303,14 +350,15 @@ class ContractVersionController extends Controller
     /**
      * Delete a file from a version
      */
-    public function deleteFile(Contract $contract, ContractVersion $version, ContractVersionFile $file)
+    public function deleteFile(Contract $contract, ContractVersion $version, ContractVersionFile $file): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -326,8 +374,8 @@ class ContractVersionController extends Controller
 
         // If no other references exist, delete the stored file record and physical file
         if ($storedFile && !ContractVersionFile::where('stored_file_id', $storedFile->id)->exists()) {
-            if ($storedFile->file_path && Storage::disk('private')->exists($storedFile->file_path)) {
-                Storage::disk('private')->delete($storedFile->file_path);
+            if ($storedFile->path && Storage::disk($storedFile->disk)->exists($storedFile->path)) {
+                Storage::disk($storedFile->disk)->delete($storedFile->path);
             }
             $storedFile->delete();
         }

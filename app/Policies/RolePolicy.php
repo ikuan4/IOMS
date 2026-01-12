@@ -24,7 +24,8 @@ class RolePolicy
         }
 
         // Priority hierarchy: user can only view roles with priority >= their own
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $effectiveRole = $user->effectiveRole();
+        $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
         $rolePriority = $role->priority ?? 999;
 
         // Allow viewing roles at same level or lower privilege (higher number)
@@ -56,7 +57,8 @@ class RolePolicy
         }
 
         // Priority hierarchy: user can only edit roles with priority > their own (lower privilege)
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $effectiveRole = $user->effectiveRole();
+        $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
         $rolePriority = $role->priority ?? 999;
 
         if ($rolePriority <= $userPriority) {
@@ -92,7 +94,8 @@ class RolePolicy
         }
 
         // Priority hierarchy: user can only delete roles with priority > their own
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $effectiveRole = $user->effectiveRole();
+        $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
         $rolePriority = $role->priority ?? 999;
 
         if ($rolePriority <= $userPriority) {
@@ -152,7 +155,8 @@ class RolePolicy
         }
 
         // Priority hierarchy: user can only restore roles with priority > their own
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
+        $effectiveRole = $user->effectiveRole();
+        $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
         $rolePriority = $role->priority ?? 999;
 
         if ($rolePriority <= $userPriority) {

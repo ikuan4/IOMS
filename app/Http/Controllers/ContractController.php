@@ -28,13 +28,13 @@ class ContractController extends Controller
     /**
      * List contracts with search + status cards + branch filtering
      */
-    public function index(Request $request)
+    public function index(Request $request): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.view')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.view')) {
             abort(403, 'Unauthorized action.');
         }
 
-        $user = Auth::user();
         $search = $request->query('search');
         $status = $request->query('status', 'all');
         $contractTypeId = $request->query('contract_type_id');
@@ -46,7 +46,7 @@ class ContractController extends Controller
             $branches = Branch::orderBy('name')->get();
         } else {
             $selectedBranchId = $user->branch_id;
-            $branches = collect();
+            $branches = collect([]);
         }
 
         // Base query for counts
@@ -167,13 +167,12 @@ class ContractController extends Controller
     /**
      * Show create form
      */
-    public function create()
+    public function create(): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.create')) {
             abort(403, 'Unauthorized action.');
         }
-
-        $user = Auth::user();
         $contract = new Contract();
 
         // Only active, non-deleted types from user's branch
@@ -196,9 +195,10 @@ class ContractController extends Controller
     /**
      * Store new contract + version + files + reminders + recipients
      */
-    public function store(Request $request)
+    public function store(Request $request): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.create')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -222,8 +222,11 @@ class ContractController extends Controller
         ]);
 
         $userId = Auth::id();
-        $user = Auth::user();
         $branchId = $user->branch_id;
+
+        if ($branchId === null) {
+            return redirect()->back()->withErrors(['error' => 'User branch not set.']);
+        }
 
         DB::transaction(function () use ($request, $data, $userId, $branchId) {
             // Parse dates as IST, store as UTC
@@ -232,18 +235,19 @@ class ContractController extends Controller
             $startUtc = $startIst->copy()->timezone('UTC');
             $endUtc = $endIst->copy()->timezone('UTC');
 
+            /** @var ContractType $type */
             $type = ContractType::findOrFail($data['contract_type_id']);
 
             // Create contract with temporary number
             $contract = new Contract();
-            $contract->branch_id = $branchId;
+            $contract->branch_id = (int)$branchId;
             $contract->contract_type_id = $type->id;
             $contract->contract_number = 'TEMP';
             $contract->contract_with = $data['contract_with'];
             $contract->grace_period_days = $data['grace_period_days'];
             $contract->is_active = true;
-            $contract->created_by = $userId;
-            $contract->updated_by = $userId;
+            $contract->created_by = $userId ? (int)$userId : null;
+            $contract->updated_by = $userId ? (int)$userId : null;
             $contract->save();
 
             // Generate contract number: CT-{BRANCH_ID}/{TYPE_CODE}/{YYYY}/{id}
@@ -258,8 +262,8 @@ class ContractController extends Controller
             $version->description = $data['description'] ?? null;
             $version->start_date = $startUtc;
             $version->end_date = $endUtc;
-            $version->created_by = $userId;
-            $version->updated_by = $userId;
+            $version->created_by = $userId ? (int)$userId : null;
+            $version->updated_by = $userId ? (int)$userId : null;
             $version->save();
 
             // Handle file uploads
@@ -303,11 +307,15 @@ class ContractController extends Controller
             }
 
             // Create reminders
-            $reminderDays = collect($data['reminder_days'] ?? [])
-                ->filter(fn($v) => $v !== null && $v !== '')
-                ->map(fn($v) => (int) $v)
-                ->unique()
-                ->values();
+            $reminderInput = $data['reminder_days'] ?? [];
+            if (!is_array($reminderInput)) {
+                $reminderInput = [];
+            }
+            /** @var array<int, int> $reminderDays */
+            $reminderDays = array_values(array_unique(array_map(
+                static fn($v): int => (int) $v,
+                array_filter($reminderInput, static fn($v): bool => $v !== null && $v !== '')
+            )));
 
             foreach ($reminderDays as $days) {
                 ContractReminder::create([
@@ -319,14 +327,18 @@ class ContractController extends Controller
             }
 
             // Sync recipients
-            $recipientIds = collect($data['recipient_ids'] ?? [])
-                ->filter()
-                ->map(fn($v) => (int) $v)
-                ->unique()
-                ->values();
+            $recipientInput = $data['recipient_ids'] ?? [];
+            if (!is_array($recipientInput)) {
+                $recipientInput = [];
+            }
+            /** @var array<int, int> $recipientIds */
+            $recipientIds = array_values(array_unique(array_map(
+                static fn($v): int => (int) $v,
+                array_filter($recipientInput, static fn($v): bool => $v !== null && $v !== '')
+            )));
 
-            if ($recipientIds->isNotEmpty()) {
-                $contract->notificationRecipients()->sync($recipientIds->all());
+            if ($recipientIds !== []) {
+                $contract->notificationRecipients()->sync($recipientIds);
             }
         });
 
@@ -338,14 +350,15 @@ class ContractController extends Controller
     /**
      * Show contract details with versions
      */
-    public function show(Contract $contract)
+    public function show(Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.view')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.view')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -368,14 +381,15 @@ class ContractController extends Controller
     /**
      * Show edit form
      */
-    public function edit(Contract $contract)
+    public function edit(Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -405,14 +419,15 @@ class ContractController extends Controller
     /**
      * Update contract + latest version
      */
-    public function update(Request $request, Contract $contract)
+    public function update(Request $request, Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -445,7 +460,7 @@ class ContractController extends Controller
             $contract->contract_with = $data['contract_with'];
             $contract->grace_period_days = $data['grace_period_days'];
             $contract->is_active = $request->boolean('is_active');
-            $contract->updated_by = $userId;
+            $contract->updated_by = $userId ? (int)$userId : null;
             $contract->save();
 
             $version = $contract->latestVersion;
@@ -459,13 +474,13 @@ class ContractController extends Controller
                 $version = new ContractVersion();
                 $version->contract_id = $contract->id;
                 $version->version_number = 1;
-                $version->created_by = $userId;
+                $version->created_by = $userId ? (int)$userId : null;
             }
 
             $version->description = $data['description'] ?? null;
             $version->start_date = $startUtc;
             $version->end_date = $endUtc;
-            $version->updated_by = $userId;
+            $version->updated_by = $userId ? (int)$userId : null;
             $version->save();
 
             // Handle file removals
@@ -520,11 +535,15 @@ class ContractController extends Controller
             // Refresh reminders
             $contract->reminders()->delete();
 
-            $reminderDays = collect($data['reminder_days'] ?? [])
-                ->filter(fn($v) => $v !== null && $v !== '')
-                ->map(fn($v) => (int) $v)
-                ->unique()
-                ->values();
+            $reminderInput = $data['reminder_days'] ?? [];
+            if (!is_array($reminderInput)) {
+                $reminderInput = [];
+            }
+            /** @var array<int, int> $reminderDays */
+            $reminderDays = array_values(array_unique(array_map(
+                static fn($v): int => (int) $v,
+                array_filter($reminderInput, static fn($v): bool => $v !== null && $v !== '')
+            )));
 
             foreach ($reminderDays as $days) {
                 ContractReminder::create([
@@ -536,13 +555,17 @@ class ContractController extends Controller
             }
 
             // Sync recipients
-            $recipientIds = collect($data['recipient_ids'] ?? [])
-                ->filter()
-                ->map(fn($v) => (int) $v)
-                ->unique()
-                ->values();
+            $recipientInput = $data['recipient_ids'] ?? [];
+            if (!is_array($recipientInput)) {
+                $recipientInput = [];
+            }
+            /** @var array<int, int> $recipientIds */
+            $recipientIds = array_values(array_unique(array_map(
+                static fn($v): int => (int) $v,
+                array_filter($recipientInput, static fn($v): bool => $v !== null && $v !== '')
+            )));
 
-            $contract->notificationRecipients()->sync($recipientIds->all());
+            $contract->notificationRecipients()->sync($recipientIds);
         });
 
         return redirect()
@@ -553,14 +576,15 @@ class ContractController extends Controller
     /**
      * Soft delete contract
      */
-    public function destroy(Contract $contract)
+    public function destroy(Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.delete')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.delete')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -574,16 +598,18 @@ class ContractController extends Controller
     /**
      * Restore soft-deleted contract
      */
-    public function restore(Request $request, $id)
+    public function restore(Request $request, int|string $id): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.restore')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.restore')) {
             abort(403, 'Unauthorized action.');
         }
 
+        /** @var Contract $contract */
         $contract = Contract::withTrashed()->findOrFail($id);
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -637,14 +663,15 @@ class ContractController extends Controller
     /**
      * Export contract to Excel
      */
-    public function exportExcel(Contract $contract)
+    public function exportExcel(Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.export')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.export')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -667,14 +694,15 @@ class ContractController extends Controller
     /**
      * Create new version form
      */
-    public function createVersion(Contract $contract)
+    public function createVersion(Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.create')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -702,14 +730,15 @@ class ContractController extends Controller
     /**
      * Store new version
      */
-    public function storeVersion(Request $request, Contract $contract)
+    public function storeVersion(Request $request, Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.create')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.create')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -749,8 +778,8 @@ class ContractController extends Controller
             $version->description = $data['description'] ?? null;
             $version->start_date = $startUtc;
             $version->end_date = $endUtc;
-            $version->created_by = $userId;
-            $version->updated_by = $userId;
+            $version->created_by = $userId ? (int) $userId : null;
+            $version->updated_by = $userId ? (int) $userId : null;
             $version->save();
 
             // Handle files
@@ -792,13 +821,17 @@ class ContractController extends Controller
             }
 
             // Update reminders if provided
-            $reminderDays = collect($data['reminder_days'] ?? [])
-                ->filter(fn($v) => $v !== null && $v !== '')
-                ->map(fn($v) => (int) $v)
-                ->unique()
-                ->values();
+            $reminderInput = $data['reminder_days'] ?? [];
+            if (!is_array($reminderInput)) {
+                $reminderInput = [];
+            }
+            /** @var array<int, int> $reminderDays */
+            $reminderDays = array_values(array_unique(array_map(
+                static fn($v): int => (int) $v,
+                array_filter($reminderInput, static fn($v): bool => $v !== null && $v !== '')
+            )));
 
-            if ($reminderDays->isNotEmpty()) {
+            if ($reminderDays !== []) {
                 $contract->reminders()->delete();
 
                 foreach ($reminderDays as $days) {
@@ -811,7 +844,7 @@ class ContractController extends Controller
                 }
             }
 
-            $contract->updated_by = $userId;
+            $contract->updated_by = $userId ? (int) $userId : null;
             $contract->save();
         });
 
@@ -823,21 +856,25 @@ class ContractController extends Controller
     /**
      * Edit version form
      */
-    public function editVersion(ContractVersion $version)
+    public function editVersion(ContractVersion $version): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check through contract
         $contract = $version->contract;
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$contract) {
+            abort(404);
+        }
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
         $version->load(['contract.branch', 'files.storedFile']);
 
-        $allVersions = $version->contract->versions()
+        $allVersions = $contract->versions()
             ->orderBy('version_number', 'desc')
             ->get();
 
@@ -847,15 +884,19 @@ class ContractController extends Controller
     /**
      * Update version
      */
-    public function updateVersion(Request $request, ContractVersion $version)
+    public function updateVersion(Request $request, ContractVersion $version): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.versions.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.versions.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check through contract
         $contract = $version->contract;
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$contract) {
+            abort(404);
+        }
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -884,7 +925,7 @@ class ContractController extends Controller
             $version->description = $data['description'] ?? null;
             $version->start_date = $startUtc;
             $version->end_date = $endUtc;
-            $version->updated_by = $userId;
+            $version->updated_by = $userId ? (int) $userId : null;
             $version->save();
 
             // Handle file removals
@@ -936,7 +977,7 @@ class ContractController extends Controller
                 }
             }
 
-            $contract->updated_by = $userId;
+            $contract->updated_by = $userId ? (int) $userId : null;
             $contract->save();
         });
 
@@ -948,14 +989,15 @@ class ContractController extends Controller
     /**
      * Send test notification
      */
-    public function sendTestNotification(Contract $contract)
+    public function sendTestNotification(Contract $contract): mixed
     {
-        if (!Auth::user()->hasPermission('contracts.edit')) {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contracts.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
         // Branch access check
-        if (!Auth::user()->isSuperAdmin() && $contract->branch_id !== Auth::user()->branch_id) {
+        if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
         }
 

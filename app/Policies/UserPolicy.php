@@ -27,8 +27,10 @@ class UserPolicy
         }
 
         // Check hierarchy: can only view users with lower hierarchy (higher priority number)
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
-        $modelPriority = $model->effectiveRole()?->priority ?? 999;
+        $userEffectiveRole = $user->effectiveRole();
+        $userPriority = $userEffectiveRole ? ($userEffectiveRole->priority ?? 999) : 999;
+        $modelEffectiveRole = $model->effectiveRole();
+        $modelPriority = $modelEffectiveRole ? ($modelEffectiveRole->priority ?? 999) : 999;
 
         return $modelPriority > $userPriority;
     }
@@ -59,8 +61,10 @@ class UserPolicy
         }
 
         // Check hierarchy: can only update users with lower hierarchy (higher priority number)
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
-        $modelPriority = $model->effectiveRole()?->priority ?? 999;
+        $userEffectiveRole = $user->effectiveRole();
+        $userPriority = $userEffectiveRole ? ($userEffectiveRole->priority ?? 999) : 999;
+        $modelEffectiveRole = $model->effectiveRole();
+        $modelPriority = $modelEffectiveRole ? ($modelEffectiveRole->priority ?? 999) : 999;
 
         return $modelPriority > $userPriority;
     }
@@ -86,8 +90,10 @@ class UserPolicy
         }
 
         // Check hierarchy: can only delete users with lower hierarchy (higher priority number)
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
-        $modelPriority = $model->effectiveRole()?->priority ?? 999;
+        $userEffectiveRole = $user->effectiveRole();
+        $userPriority = $userEffectiveRole ? ($userEffectiveRole->priority ?? 999) : 999;
+        $modelEffectiveRole = $model->effectiveRole();
+        $modelPriority = $modelEffectiveRole ? ($modelEffectiveRole->priority ?? 999) : 999;
 
         return $modelPriority > $userPriority;
     }
@@ -108,8 +114,10 @@ class UserPolicy
         }
 
         // Check hierarchy: can only restore users with lower hierarchy (higher priority number)
-        $userPriority = $user->effectiveRole()?->priority ?? 999;
-        $modelPriority = $model->effectiveRole()?->priority ?? 999;
+        $userEffectiveRole = $user->effectiveRole();
+        $userPriority = $userEffectiveRole ? ($userEffectiveRole->priority ?? 999) : 999;
+        $modelEffectiveRole = $model->effectiveRole();
+        $modelPriority = $modelEffectiveRole ? ($modelEffectiveRole->priority ?? 999) : 999;
 
         return $modelPriority > $userPriority;
     }

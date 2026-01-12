@@ -13,8 +13,8 @@ class ContractExpiryNotification extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $contract;
-    public $daysRemaining;
+    public Contract $contract;
+    public int $daysRemaining;
 
     /**
      * Create a new message instance.
@@ -31,7 +31,7 @@ class ContractExpiryNotification extends Mailable
     public function envelope(): Envelope
     {
         $subject = 'Contract Expiry Notification';
-        
+
         if ($this->daysRemaining > 0) {
             $subject .= " - {$this->contract->contract_number} (Expiring in {$this->daysRemaining} days)";
         } elseif ($this->daysRemaining === 0) {

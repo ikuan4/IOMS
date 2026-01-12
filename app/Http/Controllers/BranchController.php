@@ -40,6 +40,11 @@ class BranchController extends Controller
         }
 
         $branches = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
+
+        if ($request->ajax()) {
+            return view('branches._branches_table', compact('branches'));
+        }
+
         return view('branches.index', compact('branches'));
     }
 
@@ -175,7 +180,7 @@ class BranchController extends Controller
             'updated_by' => Auth::id(),
         ]);
 
-        AuditLog::log('update_branch', $branch, $oldValues, $branch->fresh()->toArray());
+        AuditLog::log('update_branch', $branch, $oldValues, $branch->fresh()?->toArray() ?? []);
 
         return redirect()->route('branches.index')->with('status', 'Branch updated.');
     }
@@ -228,7 +233,7 @@ class BranchController extends Controller
             }
         }
 
-        AuditLog::log('restore_branch', $branch, [], $branch->fresh()->toArray());
+        AuditLog::log('restore_branch', $branch, [], $branch->fresh()?->toArray() ?? []);
 
         $message = 'Branch restored.';
         if ($trashedRoles > 0) {

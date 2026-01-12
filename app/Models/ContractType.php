@@ -98,7 +98,11 @@ class ContractType extends Model
     public static function generateCode(string $name, int $branchId, ?int $excludeId = null): string
     {
         // Remove spaces and get first 3 chars
-        $base = strtoupper(preg_replace('/\s+/', '', $name));
+        $normalized = preg_replace('/\s+/', '', $name);
+        if ($normalized === null) {
+            $normalized = $name;
+        }
+        $base = strtoupper($normalized);
         $base = mb_substr($base, 0, 3);
 
         // Pad if less than 3 chars

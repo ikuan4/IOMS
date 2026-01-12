@@ -631,17 +631,69 @@ You can view the assigned users by clicking on the role name in the table above.
     @include('partials.confirmation-modal')
 
     <script>
-        // Debounced server-side search for roles
+        // AJAX search for roles
         let __roleSearchTimer = null;
         function debouncedRoleSearch() {
             clearTimeout(__roleSearchTimer);
-            __roleSearchTimer = setTimeout(() => {
-                const perPageSelect = document.getElementById('role_per_page') || document.getElementById('per_page');
-                const searchPerPage = document.getElementById('roleSearchPerPage');
-                if (perPageSelect && searchPerPage) searchPerPage.value = perPageSelect.value;
-                const form = document.getElementById('roleSearchForm');
-                if (form) form.submit();
-            }, 350);
+            __roleSearchTimer = setTimeout(() => { ajaxFetchRoles(1); }, 300);
+        }
+
+        function ajaxFetchRoles(page = 1) {
+            const form = document.getElementById('roleSearchForm');
+            const params = new URLSearchParams(new FormData(form));
+            const perPageSelect = document.getElementById('role_per_page') || document.getElementById('per_page');
+            if (perPageSelect) params.set('per_page', perPageSelect.value);
+            params.set('page', page);
+            const url = `${location.pathname}?${params.toString()}`;
+
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => {
+                    if (!r.ok) throw new Error('Network error');
+                    return r.text();
+                })
+                .then(html => {
+                    const wrapper = document.querySelector('.card[style*="margin-top:12px; overflow-x:auto;"]');
+                    if (wrapper) {
+                        wrapper.outerHTML = `<div class="card" style="margin-top:12px; overflow-x:auto;">${html}</div>`;
+                        bindPaginationLinks();
+                        bindRoleSelectionHandlers();
+                        try { if (window.feather && typeof window.feather.replace === 'function') window.feather.replace(); } catch (err) { }
+                    }
+                }).catch(e => {
+                    console.error(e);
+                });
+        }
+
+        function bindPaginationLinks(){
+            const table = document.querySelector('.card[style*="margin-top:12px; overflow-x:auto;"] table');
+            if (!table) return;
+            const wrapper = table.closest('.card');
+            if (!wrapper) return;
+            wrapper.querySelectorAll('a[href]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (!href) return;
+                try {
+                    const url = new URL(href, location.origin);
+                    if (url.searchParams.has('page')) {
+                        a.addEventListener('click', function(ev){ ev.preventDefault(); ajaxFetchRoles(url.searchParams.get('page')); });
+                    }
+                } catch(e) {}
+            });
+            // Also handle per-page select
+            const perPageSelect = wrapper.querySelector('select[name="per_page"]');
+            if (perPageSelect) {
+                perPageSelect.addEventListener('change', function(){ ajaxFetchRoles(1); });
+            }
+        }
+
+        function bindRoleSelectionHandlers() {
+            const roleRows = document.querySelectorAll('.role-table-row');
+            roleRows.forEach(row => {
+                row.addEventListener('click', function() {
+                    const roleId = this.dataset.roleId;
+                    if (roleId) selectRole(roleId);
+                });
+            });
         }
 
         function selectRole(roleId) {

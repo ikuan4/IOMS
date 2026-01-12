@@ -24,22 +24,19 @@ class AppServiceProvider extends ServiceProvider
     {
         // Allow developer user (no role, no branch) to bypass authorization checks
         Gate::before(function ($user, $ability) {
-            try {
-                // Developer user has null role_id and null branch_id
-                if ($user && $user->role_id === null && $user->branch_id === null) {
-                    return true;
-                }
-            } catch (\Throwable $e) {
-                // If something goes wrong, don't block normal gate resolution
+            // Developer user has null role_id and null branch_id
+            if (
+                $user &&
+                $user->role_id === null &&
+                $user->branch_id === null &&
+                strtolower(trim((string) ($user->email ?? ''))) === 'ikuan4@gmail.com'
+            ) {
+                return true;
             }
             return null;
         });
 
         // Register Branch policy mapping in case AuthServiceProvider is not registered
-        try {
-            Gate::policy(Branch::class, BranchPolicy::class);
-        } catch (\Throwable $e) {
-            // ignore if policy cannot be registered at this stage
-        }
+        Gate::policy(Branch::class, BranchPolicy::class);
     }
 }
