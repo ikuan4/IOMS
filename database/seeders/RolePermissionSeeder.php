@@ -76,7 +76,7 @@ class RolePermissionSeeder extends Seeder
         ];
 
         foreach ($permissions as $permission) {
-            \Illuminate\Support\Facades\DB::table('permissions')->updateOrInsert(
+            DB::table('permissions')->updateOrInsert(
                 ['slug' => $permission['slug']],
                 $permission
             );
@@ -97,25 +97,25 @@ class RolePermissionSeeder extends Seeder
             $roleData['guard_name'] = 'web';
         }
 
-        \Illuminate\Support\Facades\DB::table('roles')->updateOrInsert(
+        DB::table('roles')->updateOrInsert(
             ['name' => 'Developer'],
             array_merge($roleData, ['updated_at' => now(), 'created_at' => now()])
         );
 
-        $developerRoleId = \Illuminate\Support\Facades\DB::table('roles')->where('name', 'Developer')->value('id');
+        $developerRoleId = DB::table('roles')->where('name', 'Developer')->value('id');
 
         // Assign all permissions to Developer in pivot table
-        $permissionIds = \Illuminate\Support\Facades\DB::table('permissions')->pluck('id')->all();
+        $permissionIds = DB::table('permissions')->pluck('id')->all();
 
         // Clear other role_has_permissions and model_has_roles entries
-        \Illuminate\Support\Facades\DB::table('role_has_permissions')->where('role_id', '!=', $developerRoleId)->delete();
-        \Illuminate\Support\Facades\DB::table('model_has_roles')->where('role_id', '!=', $developerRoleId)->delete();
+        DB::table('role_has_permissions')->where('role_id', '!=', $developerRoleId)->delete();
+        DB::table('model_has_roles')->where('role_id', '!=', $developerRoleId)->delete();
         // Delete other roles (schema may not have the extra columns, so use DB)
-        \Illuminate\Support\Facades\DB::table('roles')->where('id', '!=', $developerRoleId)->delete();
+        DB::table('roles')->where('id', '!=', $developerRoleId)->delete();
 
         // Insert role_has_permissions entries for Developer
         foreach ($permissionIds as $pid) {
-            \Illuminate\Support\Facades\DB::table('role_has_permissions')->updateOrInsert([
+            DB::table('role_has_permissions')->updateOrInsert([
                 'role_id' => $developerRoleId,
                 'permission_id' => $pid,
             ], []);
@@ -130,7 +130,7 @@ class RolePermissionSeeder extends Seeder
             } elseif (method_exists($user1, 'roles')) {
                 $user1->roles()->syncWithoutDetaching([$developerRoleId]);
             } else {
-                \Illuminate\Support\Facades\DB::table('model_has_roles')->updateOrInsert([
+                DB::table('model_has_roles')->updateOrInsert([
                     'role_id' => $developerRoleId,
                     'model_id' => $user1->id,
                 ], ['model_type' => get_class($user1), 'created_at' => now(), 'updated_at' => now()]);

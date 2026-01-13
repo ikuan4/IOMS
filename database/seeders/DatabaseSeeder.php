@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Role;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
@@ -18,10 +19,10 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Ensure a clean state for roles and users so Developer and FrancisJr are primary
-        \Illuminate\Support\Facades\DB::table('role_has_permissions')->delete();
-        \Illuminate\Support\Facades\DB::table('model_has_roles')->delete();
-        \Illuminate\Support\Facades\DB::table('users')->delete();
-        \Illuminate\Support\Facades\DB::table('roles')->delete();
+        DB::table('role_has_permissions')->delete();
+        DB::table('model_has_roles')->delete();
+        DB::table('users')->delete();
+        DB::table('roles')->delete();
 
         // Optionally recreate a main branch (not required for Developer)
         $branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['created_by' => null, 'updated_by' => null]);

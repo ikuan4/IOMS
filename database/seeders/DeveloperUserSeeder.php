@@ -18,7 +18,7 @@ class DeveloperUserSeeder extends Seeder
             if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'slug')) {
                 $roleData['slug'] = 'developer';
             }
-            \Illuminate\Support\Facades\DB::table('roles')->updateOrInsert(
+            DB::table('roles')->updateOrInsert(
                 ['name' => 'Developer'],
                 array_merge($roleData, ['updated_at' => now(), 'created_at' => now()])
             );
