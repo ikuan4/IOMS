@@ -711,14 +711,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Module toggle functionality - enables/disables entire module
     moduleToggles.forEach(toggle => {
         toggle.addEventListener('change', function(e) {
-            console.log('Module toggle changed:', this.dataset.group, 'checked:', this.checked);
             const group = this.dataset.group;
             const groupCheckboxes = document.querySelectorAll(`.permission-checkbox[data-group="${group}"]`);
             const groupCards = document.querySelectorAll(`.permission-card[data-module="${group}"]`);
 
             if (this.checked) {
                 // Enable module - allow interaction (but don't auto-check all)
-                console.log('Enabling module:', group);
                 groupCards.forEach(card => {
                     card.classList.remove('disabled');
                     card.style.pointerEvents = 'auto';
@@ -726,7 +724,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             } else {
                 // Disable module - prevent interaction and uncheck all
-                console.log('Disabling module:', group);
                 groupCards.forEach(card => {
                     card.classList.add('disabled');
                     card.style.pointerEvents = 'none';
@@ -747,18 +744,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update individual checkbox changes (only when module is enabled)
     permissionCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function(e) {
-            console.log('Permission checkbox changed:', this.id, 'checked:', this.checked);
             const group = this.dataset.group;
             handlePermissionDependencies(this);
             // Enforce versions view dependency UI state on any change
             updateVersionCrudDisabled();
             updateModuleToggleState(group);
             updateSummary();
-        });
-
-        // Also add click listener to debug
-        checkbox.addEventListener('click', function(e) {
-            console.log('Permission checkbox clicked:', this.id, 'disabled:', this.disabled);
         });
     });
 
@@ -776,7 +767,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (isChecked && ['create', 'edit', 'delete', 'restore'].includes(action)) {
                 const viewVersionCheckbox = document.querySelector(`input[data-permission="${viewVersionSlug}"]`);
                 if (viewVersionCheckbox && !viewVersionCheckbox.checked) {
-                    console.log(`Auto-enabling ${viewVersionSlug} because ${permissionSlug} was enabled`);
                     viewVersionCheckbox.checked = true;
                 }
             }
@@ -787,7 +777,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     const crudSlug = 'contracts.versions.' + crudAction;
                     const crudCheckbox = document.querySelector(`input[data-permission="${crudSlug}"]`);
                     if (crudCheckbox && crudCheckbox.checked) {
-                        console.log(`Auto-disabling ${crudSlug} because ${viewVersionSlug} was disabled`);
                         crudCheckbox.checked = false;
                     }
                 });
@@ -805,7 +794,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isChecked && ['create', 'edit', 'delete'].includes(action)) {
             const viewCheckbox = document.querySelector(`input[data-permission="${viewSlug}"]`);
             if (viewCheckbox && !viewCheckbox.checked) {
-                console.log(`Auto-enabling ${viewSlug} because ${permissionSlug} was enabled`);
                 viewCheckbox.checked = true;
             }
         }
@@ -816,7 +804,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const crudSlug = module + '.' + crudAction;
                 const crudCheckbox = document.querySelector(`input[data-permission="${crudSlug}"]`);
                 if (crudCheckbox && crudCheckbox.checked) {
-                    console.log(`Auto-disabling ${crudSlug} because ${viewSlug} was disabled`);
                     crudCheckbox.checked = false;
                 }
             });
@@ -847,24 +834,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initial enforcement for version dependencies
     updateVersionCrudDisabled();
 
-    // Debug: Add click listeners to all toggle labels
-    document.querySelectorAll('.toggle-switch').forEach(label => {
-        label.addEventListener('click', function(e) {
-            console.log('Toggle switch clicked:', e.target);
-        });
-    });
-
-    // Before form submission, log what's being submitted
+    // Before form submission
     const form = document.getElementById('permissions-form');
-    form.addEventListener('submit', function(e) {
-        console.log('Form submitting...');
-
-        // Log what's being submitted
-        const formData = new FormData(form);
-        const permissions = formData.getAll('permissions[]');
-        console.log('Submitting permissions:', permissions);
-        console.log('Number of permissions:', permissions.length);
-    });
 
     // Initialize summary
     updateSummary();

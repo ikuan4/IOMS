@@ -2,18 +2,30 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\SystemUsersFullExport;
 use App\Models\Branch;
 use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BranchController extends Controller
 {
+    public function exportSystemUsersExcel(Request $request): BinaryFileResponse
+    {
+        $currentUser = Auth::user();
+        abort_unless($currentUser && $currentUser->isSuperAdmin(), 403);
+
+        $filename = 'system-users-' . date('Ymd_His') . '.xlsx';
+        return Excel::download(new SystemUsersFullExport(), $filename);
+    }
+
     public function index(Request $request): View
     {
         $this->authorize('viewAny', Branch::class);
@@ -198,16 +210,14 @@ class BranchController extends Controller
 
         // Requirement: allow deleting branch if it only has inactive users/roles.
         // Block deletion only when ACTIVE (not-deleted) users or active roles exist.
+        // Note: Modal validation should prevent reaching here if dependencies exist
         $activeUserCount = $branch->users()->where('active', true)->count();
-        if ($activeUserCount > 0) {
-            return redirect()->route('branches.index')
-                ->with('error', "Cannot delete branch '{$branch->name}' because it has {$activeUserCount} active user(s). Please set them inactive or delete them first.");
-        }
-
         $activeRoleCount = $branch->roles()->where('is_active', true)->count();
-        if ($activeRoleCount > 0) {
+
+        if ($activeUserCount > 0 || $activeRoleCount > 0) {
+            // Fallback validation (should not reach here if modal is used)
             return redirect()->route('branches.index')
-                ->with('error', "Cannot delete branch '{$branch->name}' because it has {$activeRoleCount} active role(s). Please set them inactive or delete them first.");
+                ->with('error', 'Cannot delete branch due to active dependencies.');
         }
 
         AuditLog::log('delete_branch', $branch, $branch->toArray());
@@ -291,12 +301,22 @@ class BranchController extends Controller
             ];
         }
 
+        $errorMessage = 'Branch can be deleted safely.';
+        if (!$canDelete) {
+            $parts = [];
+            if ($activeUserCount > 0) {
+                $parts[] = "{$activeUserCount} active user" . ($activeUserCount > 1 ? 's' : '');
+            }
+            if ($activeRoleCount > 0) {
+                $parts[] = "{$activeRoleCount} active role" . ($activeRoleCount > 1 ? 's' : '');
+            }
+            $errorMessage = "Cannot delete branch '{$branch->name}' because it has " . implode(' and ', $parts) . ". Please set them inactive or delete them first.";
+        }
+
         return response()->json([
             'can_delete' => $canDelete,
             'dependencies' => $dependencies,
-            'message' => $canDelete
-                ? 'Branch can be deleted safely.'
-                : 'Cannot delete branch. Please set active users/roles inactive or delete them first.'
+            'message' => $errorMessage
         ]);
     }
 

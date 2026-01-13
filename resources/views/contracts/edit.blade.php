@@ -59,7 +59,54 @@
                         style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;margin-top:8px;">
                     <p class="muted" style="font-size:13px;margin-top:6px;">Days before end date for "Expiring Soon" status</p>
                 </div>
+
+                <div style="grid-column:1 / -1;">
+                    <label style="font-size:15px;font-weight:600;margin-bottom:8px;display:block;">Contract Status</label>
+                    <label class="toggle-switch" style="display:inline-flex;align-items:center;cursor:pointer;gap:12px;">
+                        <input
+                            type="checkbox"
+                            name="is_active"
+                            value="1"
+                            {{ old('is_active', $contract->is_active ?? true) ? 'checked' : '' }}
+                            class="toggle-input"
+                        >
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" style="font-size:15px;font-weight:500;">Contract is Active</span>
+                    </label>
+                    <p class="muted" style="font-size:13px;margin-top:6px;">Turn this off to mark the contract as Inactive / Archived.</p>
+                </div>
             </div>
+
+            <style>
+                .toggle-switch { position: relative; }
+                .toggle-input { position: absolute; opacity: 0; width: 0; height: 0; }
+                .toggle-slider {
+                    position: relative;
+                    display: inline-block;
+                    width: 48px;
+                    height: 24px;
+                    background-color: #cbd5e1;
+                    border-radius: 24px;
+                    transition: background-color 0.3s;
+                }
+                .toggle-slider::before {
+                    content: '';
+                    position: absolute;
+                    width: 18px;
+                    height: 18px;
+                    left: 3px;
+                    top: 3px;
+                    background-color: white;
+                    border-radius: 50%;
+                    transition: transform 0.3s;
+                }
+                .toggle-input:checked + .toggle-slider {
+                    background-color: #10b981;
+                }
+                .toggle-input:checked + .toggle-slider::before {
+                    transform: translateX(24px);
+                }
+            </style>
         </div>
 
         @php
@@ -85,9 +132,9 @@
             </div>
 
             <div style="margin-top:18px;">
-                <label for="description" style="font-size:15px;font-weight:600;">Description</label>
+                <label for="description" style="display:block;font-size:15px;font-weight:600;margin-bottom:8px;">Description</label>
                 <textarea name="description" id="description" rows="4"
-                    style="width:100%;max-width:800px;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;margin-top:8px;"
+                    style="width:100%;max-width:800px;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;"
                     placeholder="Optional description">{{ old('description', $latestVersion->description) }}</textarea>
             </div>
 
@@ -111,11 +158,45 @@
         <div class="card" style="margin-top:16px;">
             <h3 style="margin:0 0 16px 0;font-size:18px;">Add New Files</h3>
             <div>
-                <label for="files" style="font-size:15px;font-weight:600;">Upload Files</label>
-                <input type="file" name="files[]" id="files" multiple accept=".pdf,.doc,.docx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
-                    style="width:100%;max-width:600px;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;margin-top:8px;"
-                    onchange="updateFileLabel(this)">
-                <p class="muted" style="font-size:13px;margin-top:6px;"><span id="file_count"></span> Maximum 10MB per file</p>
+                <label style="display:block;font-weight:700;margin-bottom:8px;">
+                    Attach Documents (optional, multiple)
+                </label>
+                <div style="position:relative;">
+                    <input
+                        type="file"
+                        name="files[]"
+                        id="files"
+                        multiple
+                        accept=".pdf,.doc,.docx,.xlsx,.xls,.txt,.jpg,.jpeg,.png"
+                        style="display:none;"
+                        onchange="updateFileLabel(this)"
+                    />
+                    <label for="files" style="
+                        display:inline-flex;
+                        align-items:center;
+                        gap:8px;
+                        padding:14px 24px;
+                        background:#22c55e;
+                        color:white;
+                        border-radius:10px;
+                        font-weight:600;
+                        font-size:15px;
+                        cursor:pointer;
+                        border:none;
+                        transition:all 0.2s;
+                    "
+                    onmouseover="this.style.background='#16a34a'"
+                    onmouseout="this.style.background='#22c55e'">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                        </svg>
+                        <span id="file_label">Choose Files</span>
+                    </label>
+                    <span id="file_count" style="margin-left:20px;font-size:14px;color:#6b7280;"></span>
+                </div>
+                <div class="muted" style="font-size:12px;margin-top:4px;">
+                    Max 20 MB per file. Allowed: PDF, DOC/DOCX, XLS/XLSX, TXT, PNG, JPG, JPEG.
+                </div>
             </div>
         </div>
 
@@ -214,8 +295,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function updateFileLabel(input) {
     const fileCount = input.files.length;
-    const span = document.getElementById('file_count');
-    span.textContent = fileCount > 0 ? `${fileCount} file(s) selected. ` : '';
+    const fileLabel = document.getElementById('file_label');
+    const countSpan = document.getElementById('file_count');
+
+    if (fileCount > 0) {
+        fileLabel.textContent = `${fileCount} file${fileCount > 1 ? 's' : ''} selected`;
+        countSpan.textContent = '';
+    } else {
+        fileLabel.textContent = 'Choose Files';
+        countSpan.textContent = '';
+    }
 }
 
 function addReminder() {

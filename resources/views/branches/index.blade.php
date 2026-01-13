@@ -10,16 +10,25 @@
         </div>
     </div>
 
-    <div style="display:flex;gap:12px;align-items:flex-end; margin-top:12px;">
-        <form method="GET" action="{{ route('branches.index') }}" id="branchSearchForm" style="display:flex;gap:12px;align-items:flex-end;">
-            <input type="hidden" name="per_page" id="branchSearchPerPage" value="{{ request()->query('per_page', 10) }}">
-            <input type="text" name="search" id="branchSearchInput" value="{{ request('search') }}" placeholder="Search branches..." oninput="debouncedBranchSearch()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
-        </form>
+    <div style="display:flex;gap:12px;align-items:flex-end;justify-content:space-between;margin-top:12px;">
+        <div style="display:flex;gap:12px;align-items:flex-end;">
+            <form method="GET" action="{{ route('branches.index') }}" id="branchSearchForm" style="display:flex;gap:12px;align-items:flex-end;">
+                <input type="hidden" name="per_page" id="branchSearchPerPage" value="{{ request()->query('per_page', 10) }}">
+                <input type="text" name="search" id="branchSearchInput" value="{{ request('search') }}" placeholder="Search branches..." oninput="debouncedBranchSearch()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
+            </form>
 
-        @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('create', \App\Models\Branch::class))
-        <a href="{{ route('branches.create') }}" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
-            <span data-feather="plus"></span>
-            Add Branch
+            @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('create', \App\Models\Branch::class))
+            <a href="{{ route('branches.create') }}" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
+                <span data-feather="plus"></span>
+                Add Branch
+            </a>
+            @endif
+        </div>
+
+        @if(auth()->user() && auth()->user()->isSuperAdmin())
+        <a href="{{ route('branches.export_system_users') }}" style="background:#f8fafc;color:#0f172a;padding:12px 16px;border-radius:10px;text-decoration:none;border:1px solid #e2e8f0;display:inline-flex;align-items:center;gap:10px;height:44px;font-weight:700;font-size:15px;margin-right:20px;">
+            <img src="{{ asset('images/excel-logo.png') }}" alt="Excel" style="width:28px;height:28px;display:block;" />
+            <span>Export CSV</span>
         </a>
         @endif
     </div>

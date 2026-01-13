@@ -169,4 +169,46 @@ class ContractType extends Model
 
         return $random;
     }
+
+    /**
+     * Scope to filter only active contract types
+     *
+     * @param \Illuminate\Database\Eloquent\Builder<$this> $query
+     * @return \Illuminate\Database\Eloquent\Builder<$this>
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to filter by branch
+     *
+     * @param \Illuminate\Database\Eloquent\Builder<$this> $query
+     * @param int $branchId
+     * @return \Illuminate\Database\Eloquent\Builder<$this>
+     */
+    public function scopeByBranch($query, int $branchId)
+    {
+        return $query->where('branch_id', $branchId);
+    }
+
+    /**
+     * Check if contract type is active
+     */
+    public function isActive(): bool
+    {
+        return (bool) $this->is_active;
+    }
+
+    /**
+     * Count active contracts using this type
+     */
+    public function activeContractCount(): int
+    {
+        return $this->contracts()
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->count();
+    }
 }

@@ -26,21 +26,38 @@ class DummyRolesSeeder extends Seeder
             Role::updateOrCreate(['slug' => $r['slug']], array_merge($r, ['guard_name' => 'web']));
         }
 
-        // Create 20 dummy roles
-        for ($i = 1; $i <= 20; $i++) {
-            $name = 'Role ' . $i;
-            $slug = Str::slug($name);
-            $branch = $branches->random();
+        // Common role names in Indian organizations
+        $roleNames = [
+            'Manager', 'Assistant Manager', 'Team Lead', 'Senior Executive', 'Executive',
+            'Operations Manager', 'Sales Manager', 'HR Manager', 'Finance Manager', 'Admin Manager',
+            'Accountant', 'Supervisor', 'Coordinator', 'Officer', 'Clerk',
+            'Business Analyst', 'Project Manager', 'Product Manager', 'Technical Lead', 'Quality Analyst',
+            'Customer Service Executive', 'Marketing Executive', 'Support Engineer', 'Field Officer', 'Branch Manager',
+            'Regional Manager', 'Senior Analyst', 'Junior Analyst', 'Data Entry Operator', 'Receptionist',
+            'Store Manager', 'Warehouse Manager', 'Logistics Coordinator', 'Purchase Manager', 'Inventory Manager',
+            'IT Administrator', 'Network Administrator', 'System Analyst', 'Software Engineer', 'Senior Developer'
+        ];
 
-            Role::updateOrCreate([
-                'slug' => $slug,
-            ], [
-                'name' => $name,
-                'description' => 'Auto-generated role ' . $i,
-                'is_active' => 1,
-                'guard_name' => 'web',
-                'branch_id' => $branch->id,
-            ]);
+        // Assign 5-10 roles to each branch randomly
+        foreach ($branches as $branch) {
+            $numberOfRoles = rand(5, 10);
+            $selectedRoles = array_rand(array_flip($roleNames), $numberOfRoles);
+
+            foreach ($selectedRoles as $roleName) {
+                // Make role name unique by adding branch name
+                $uniqueRoleName = $roleName . ' - ' . $branch->name;
+                $slug = Str::slug($uniqueRoleName);
+
+                Role::updateOrCreate([
+                    'slug' => $slug,
+                ], [
+                    'name' => $uniqueRoleName,
+                    'description' => $roleName . ' at ' . $branch->name,
+                    'is_active' => 1,
+                    'guard_name' => 'web',
+                    'branch_id' => $branch->id,
+                ]);
+            }
         }
     }
 }

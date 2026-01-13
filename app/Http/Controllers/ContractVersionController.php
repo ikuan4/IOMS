@@ -282,13 +282,6 @@ class ContractVersionController extends Controller
             abort(404);
         }
 
-        \Log::info('Version deletion started', [
-            'version_id' => $version->id,
-            'version_number' => $version->version_number,
-            'contract_id' => $contract->id,
-            'contract_deleted_at_before' => $contract->deleted_at,
-        ]);
-
         // Branch access check
         if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
@@ -307,11 +300,6 @@ class ContractVersionController extends Controller
 
         // Reload contract to check status
         $contract->refresh();
-
-        \Log::info('Version deletion completed', [
-            'version_deleted' => $version->trashed(),
-            'contract_deleted_at_after' => $contract->deleted_at,
-        ]);
 
         return redirect()
             ->route('contracts.show', $contract->id)

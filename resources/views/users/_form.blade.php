@@ -151,8 +151,6 @@
 
 <script>
     (function(){
-        // quick sanity log to confirm the script is loaded and running
-        try { console.log('[avatar-upload] script loaded'); } catch (e) {}
         const input = document.getElementById('avatar');
         const img = document.getElementById('avatarPreview');
         const container = document.getElementById('avatarPreviewContainer');
@@ -263,11 +261,6 @@
                     pendingAvatarFile = file;
                 }
             });
-        }
-
-        // Debug logging helper
-        function dbg(msg, obj) {
-            try { console.log('[avatar-upload]', msg, obj || ''); } catch (e) {}
         }
 
         // Intercept form submit and always post via fetch so we can inspect server response

@@ -157,8 +157,12 @@ class User extends Authenticatable
     {
         // Check if user has Developer role
         $role = $this->effectiveRole();
-        if ($role && strtolower(trim($role->slug ?? '')) === 'developer') {
-            return true;
+        if ($role) {
+            $slug = strtolower(trim((string) ($role->slug ?? '')));
+            $name = strtolower(trim((string) ($role->name ?? '')));
+            if ($slug === 'developer' || $name === 'developer') {
+                return true;
+            }
         }
 
         // Fallback: Developer user with no role and no branch (legacy)

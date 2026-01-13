@@ -40,7 +40,7 @@
                     <a href="{{ route('contract-types.edit', $type) }}" style="background:#e0f2fe;color:#0369a1;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-right:6px;text-decoration:none;" title="Edit contract type"><span data-feather="edit"></span></a>
                     @endif
                     @if(auth()->user()->isSuperAdmin() || auth()->user()->can('delete', $type))
-                    <form action="{{ route('contract-types.destroy', $type) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete Contract Type', subtitle: 'This will soft delete the contract type', message: 'Are you sure you want to delete {{ $type->name }}?', confirmText: 'Delete Contract Type', form: this});">
+                    <form action="{{ route('contract-types.destroy', $type) }}" method="POST" style="display:inline-block;" onsubmit="event.preventDefault(); showConfirmModal({type: 'delete', title: 'Delete Contract Type', subtitle: 'This will soft delete the contract type', message: 'Are you sure you want to delete {{ addslashes($type->name) }}?', confirmText: 'Delete Contract Type', checkDependenciesUrl: '{{ route('contract-types.check_delete_dependencies', $type) }}', form: this});">
                         @csrf
                         @method('DELETE')
                         <button type="submit" style="background:#fee2e2;color:#b91c1c;padding:10px 12px;border-radius:8px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;" title="Soft delete contract type"><span data-feather="trash-2"></span></button>

@@ -65,9 +65,9 @@
 
     {{-- Search and Action Bar --}}
     <div class="card" style="margin-top:20px;padding:20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;">
+        <div style="display:flex;justify-content:flex-start;align-items:center;gap:12px;flex-wrap:wrap;">
             {{-- Search form --}}
-            <form method="GET" action="{{ route('notification-recipients.index') }}" id="recipientSearchForm" style="flex:1;min-width:250px;max-width:400px;">
+            <form method="GET" action="{{ route('notification-recipients.index') }}" id="recipientSearchForm" style="flex:0 0 auto;min-width:250px;max-width:400px;">
                 <input type="hidden" name="status" value="{{ request('status', 'all') }}">
                 <input
                     type="text"
@@ -81,14 +81,12 @@
             </form>
 
             {{-- Action buttons --}}
-            <div style="display:flex;gap:12px;">
-                @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('notification-recipients.create'))
-                    <a href="{{ route('notification-recipients.create') }}" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
-                        <span data-feather="plus"></span>
-                        New Recipient
-                    </a>
-                @endif
-            </div>
+            @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('notification-recipients.create'))
+                <a href="{{ route('notification-recipients.create') }}" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
+                    <span data-feather="plus"></span>
+                    New Recipient
+                </a>
+            @endif
         </div>
     </div>
 

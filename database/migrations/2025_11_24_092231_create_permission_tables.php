@@ -24,8 +24,17 @@ return new class extends Migration
             Schema::create($tableNames['permissions'], static function (Blueprint $table) {
                 $table->bigIncrements('id');
                 $table->string('name');
-                $table->string('guard_name');
+                $table->string('guard_name')->default('web');
+                $table->string('slug')->nullable();
+                $table->string('group')->nullable();
+                $table->text('description')->nullable();
+                $table->unsignedBigInteger('created_by')->nullable()->index();
+                $table->unsignedBigInteger('updated_by')->nullable()->index();
+                $table->unsignedBigInteger('deleted_by')->nullable()->index();
+                $table->unsignedBigInteger('restored_by')->nullable()->index();
                 $table->timestamps();
+                $table->softDeletes();
+                $table->timestamp('restored_at')->nullable();
 
                 $table->unique(['name', 'guard_name']);
             });
@@ -72,6 +81,7 @@ return new class extends Migration
                         'model_has_permissions_permission_model_type_primary');
                 }
 
+                $table->timestamps();
             });
         }
 
@@ -97,6 +107,8 @@ return new class extends Migration
                     $table->primary([$pivotRole, $columnNames['model_morph_key'], 'model_type'],
                         'model_has_roles_role_model_type_primary');
                 }
+
+                $table->timestamps();
             });
         }
 
@@ -116,6 +128,25 @@ return new class extends Migration
                     ->onDelete('cascade');
 
                 $table->primary([$pivotPermission, $pivotRole], 'role_has_permissions_permission_id_role_id_primary');
+
+                $table->timestamps();
+            });
+        }
+
+        // Create user_role pivot table
+        if (!Schema::hasTable('user_role')) {
+            Schema::create('user_role', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('user_id');
+                $table->unsignedBigInteger('role_id');
+                $table->timestamps();
+
+                $table->unique(['user_id', 'role_id']);
+                $table->index('user_id');
+                $table->index('role_id');
+
+                $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+                $table->foreign('role_id')->references('id')->on('roles')->onDelete('cascade');
             });
         }
 

@@ -20,7 +20,13 @@ return new class extends Migration {
             $table->json('new_values')->nullable();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
+            $table->unsignedBigInteger('created_by')->nullable()->index();
+            $table->unsignedBigInteger('updated_by')->nullable()->index();
+            $table->unsignedBigInteger('deleted_by')->nullable()->index();
+            $table->unsignedBigInteger('restored_by')->nullable()->index();
             $table->timestamps();
+            $table->softDeletes();
+            $table->timestamp('restored_at')->nullable();
 
             $table->index(['auditable_type', 'auditable_id']);
             $table->index('user_id');

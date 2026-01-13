@@ -24,12 +24,12 @@
                             <select name="branch_id" onchange="this.form.submit()" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #d0d7e0;font-size:14px;">
                                 <option value="">-- Select Branch --</option>
                                 @foreach($branches as $b)
-                                    <option value="{{ $b->id }}" {{ (int)($selectedBranchId ?? 0) === $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
+                                    <option value="{{ $b->id }}" {{ isset($selectedBranchId) && (int)$selectedBranchId === $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
                                 @endforeach
                             </select>
                         </form>
                     @else
-                        <div style="padding:10px 12px;border-radius:8px;border:1px solid #e6edf3;background:#f8fafc;font-size:14px;">{{ optional(\App\Models\Branch::find($selectedBranchId))->name ?? 'My Branch' }}</div>
+                        <div style="padding:10px 12px;border-radius:8px;border:1px solid #e6edf3;background:#f8fafc;font-size:14px;font-weight:600;color:#000000;">{{ optional(\App\Models\Branch::find($selectedBranchId))->name ?? 'My Branch' }}</div>
                     @endif
                 </div>
             </div>
@@ -41,7 +41,7 @@
                     <h5 style="margin:0;font-size:16px;font-weight:600;">Roles</h5>
                     <p class="muted" style="margin:4px 0 0 0;font-size:13px;">Lower priority number = Higher hierarchy. Edit priority numbers and click Save.</p>
                 </div>
-                <button id="saveHierarchyBtn" class="btn" style="background:var(--accent);color:white;padding:10px 20px;border-radius:8px;border:none;cursor:pointer;font-weight:600;display:none;">
+                <button id="saveHierarchyBtn" class="btn save-hierarchy-btn" style="background:var(--accent);color:white;padding:10px 20px;border-radius:8px;border:none;cursor:pointer;font-weight:600;">
                     Save Changes
                 </button>
             </div>
@@ -66,6 +66,8 @@
                                        min="{{ $isDev ? 1 : $currentUserPriority + 1 }}"
                                        max="100"
                                        data-role-id="{{ $r->id }}"
+                                       oninput="window.showSaveButton(this)"
+                                       onchange="window.showSaveButton(this)"
                                        title="You can only assign priorities {{ $isDev ? '1-100' : ($currentUserPriority + 1) . '-100 (lower privilege than your role)' }}">
                             </div>
                         </div>
@@ -77,12 +79,28 @@
                     <input type="hidden" name="priorities" id="prioritiesInput">
                 </form>
             @else
-                <p class="muted">No roles available for the selected branch or you are not part of any roles.</p>
+                <p class="muted">
+                    @if(($isDeveloper ?? false) && !isset($selectedBranchId))
+                        Please select a branch to view and manage roles.
+                    @elseif($rolesForView && $rolesForView->count() === 0)
+                        No roles available in the selected branch.
+                    @else
+                        No roles available for the selected branch or you are not part of any roles.
+                    @endif
+                </p>
             @endif
         </div>
     </div>
 
     <style>
+        .save-hierarchy-btn {
+            display: none;
+        }
+
+        .save-hierarchy-btn.show {
+            display: block !important;
+        }
+
         .roles-hierarchy-container {
             display: flex;
             flex-direction: column;
@@ -164,21 +182,44 @@
     </style>
 
     <script>
+        // Global function accessible from inline event handlers
+        window.showSaveButton = function(input) {
+            const saveBtn = document.getElementById('saveHierarchyBtn');
+            if (saveBtn) {
+                saveBtn.classList.add('show');
+            }
+
+            // Update the data attribute
+            const row = input.closest('.role-row');
+            if (row) {
+                row.setAttribute('data-priority', input.value);
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', function() {
             let hasChanges = false;
 
             const container = document.getElementById('rolesContainer');
             const saveBtn = document.getElementById('saveHierarchyBtn');
 
-            if (!container) return;
+            if (!container) {
+                return;
+            }
 
             // Sort roles by priority on page load (top to bottom)
             sortRolesByPriority();
 
-            // Add input event listeners to priority inputs
+            // Add multiple event listeners to catch all types of changes
             const priorityInputs = container.querySelectorAll('.priority-input');
-            priorityInputs.forEach(input => {
+            console.log('Priority inputs found:', priorityInputs.length); // Debug: input count
+
+            priorityInputs.forEach((input, index) => {
+                console.log(`Attaching listeners to input ${index}`); // Debug: listener attachment
+                input.addEventListener('input', handlePriorityChange);
                 input.addEventListener('change', handlePriorityChange);
+                input.addEventListener('keyup', handlePriorityChange);
+                input.addEventListener('mouseup', handlePriorityChange);  // For spinner buttons
+                input.addEventListener('blur', handlePriorityChange);
             });
 
             // Save button click
@@ -189,6 +230,8 @@
             function handlePriorityChange(e) {
                 const input = e.target;
                 let newPriority = parseInt(input.value) || 1;
+
+                console.log('Priority change detected:', input.value, 'event:', e.type); // Debug log
 
                 // Get user's minimum allowed priority from container
                 const userMinPriority = parseInt(container.getAttribute('data-user-priority')) || 0;
@@ -238,7 +281,10 @@
             function markAsChanged() {
                 hasChanges = true;
                 if (saveBtn) {
-                    saveBtn.style.display = 'block';
+                    saveBtn.classList.add('show');
+                    console.log('Save button shown'); // Debug log
+                } else {
+                    console.error('Save button not found'); // Debug log
                 }
             }
 

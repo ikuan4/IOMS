@@ -77,28 +77,28 @@ class SPANavigator {
         this.showLoadingIndicator();
 
         try {
-            // Check cache first
-            let html = this.cache.get(url);
+            // Add timestamp to URL to bypass cache
+            const fetchUrl = new URL(url);
+            fetchUrl.searchParams.set('_t', Date.now());
 
-            if (!html) {
-                const response = await fetch(url, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-SPA-Navigation': 'true',
-                        'Accept': 'text/html'
-                    },
-                    credentials: 'same-origin'
-                });
+            // Always fetch fresh content (disable cache for JavaScript updates)
+            const response = await fetch(fetchUrl.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-SPA-Navigation': 'true',
+                    'Accept': 'text/html',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache'
+                },
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                html = await response.text();
-
-                // Cache the response
-                this.addToCache(url, html);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
+
+            const html = await response.text();
 
             // Extract main content from the response
             const parser = new DOMParser();
@@ -247,12 +247,9 @@ class SPANavigator {
                 newScript.setAttribute(attr.name, attr.value);
             });
 
-            // Wrap inline scripts in an IIFE to avoid variable redeclaration errors
-            if (oldScript.textContent && !oldScript.src) {
-                newScript.textContent = `(function() { ${oldScript.textContent} })();`;
-            } else {
-                newScript.textContent = oldScript.textContent;
-            }
+            // Don't wrap inline scripts - execute them directly to preserve global scope
+            // This allows functions to be called from HTML attributes like oninput
+            newScript.textContent = oldScript.textContent;
 
             document.body.appendChild(newScript);
             document.body.removeChild(newScript);

@@ -9,9 +9,15 @@ class BranchSeeder extends Seeder
 {
     public function run()
     {
-        $names = ['North Branch','South Branch','East Branch','West Branch','Central Branch'];
+        $branches = [
+            'Mumbai Branch',
+            'Delhi Branch',
+            'Bangalore Branch',
+            'Pune Branch',
+            'Chennai Branch',
+        ];
 
-        foreach ($names as $name) {
+        foreach ($branches as $name) {
             Branch::updateOrCreate([
                 'name' => $name,
             ], [

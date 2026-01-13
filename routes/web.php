@@ -105,6 +105,10 @@ Route::middleware('auth')->group(function () {
 
 // Branch management (requires auth)
 Route::middleware('auth')->group(function () {
+    // Developer-only export: all users with role + branch + audit details
+    Route::get('branches/export-system-users', [App\Http\Controllers\BranchController::class, 'exportSystemUsersExcel'])
+        ->name('branches.export_system_users');
+
     Route::resource('branches', App\Http\Controllers\BranchController::class);
     Route::get('branches/{branch}/export', [App\Http\Controllers\BranchController::class, 'export'])->name('branches.export');
     Route::post('branches/{branch}/restore', [App\Http\Controllers\BranchController::class, 'restore'])->name('branches.restore');
@@ -118,6 +122,8 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->group(function () {
     // Contract Types
     Route::resource('contract-types', App\Http\Controllers\ContractTypeController::class);
+    Route::get('contract-types/{contractType}/check-delete-dependencies', [App\Http\Controllers\ContractTypeController::class, 'checkDeleteDependencies'])
+        ->name('contract-types.check_delete_dependencies');
     Route::post('contract-types/{id}/restore', [App\Http\Controllers\ContractTypeController::class, 'restore'])
         ->name('contract-types.restore');
 

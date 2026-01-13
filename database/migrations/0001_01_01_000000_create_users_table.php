@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->unique();
+            $table->string('avatar')->nullable();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('mobile')->unique();
             $table->timestamp('mobile_verified_at')->nullable();
@@ -25,6 +26,7 @@ return new class extends Migration
             $table->rememberToken();
             $table->timestamps();
             $table->softDeletes();
+            $table->timestamp('restored_at')->nullable();
 
             // Optional audit / relational fields (use indexes here; add FK constraints in later migration)
             $table->foreignId('last_updated_by')->nullable()->index();

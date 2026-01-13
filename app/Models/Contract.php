@@ -216,4 +216,75 @@ class Contract extends Model
     {
         return $query->where('is_active', true);
     }
+
+    /**
+     * Scope to filter only active contracts
+     *
+     * @param Builder<Contract> $query
+     * @return Builder<Contract>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to filter by branch
+     *
+     * @param Builder<Contract> $query
+     * @param int $branchId
+     * @return Builder<Contract>
+     */
+    public function scopeByBranch(Builder $query, int $branchId): Builder
+    {
+        return $query->where('branch_id', $branchId);
+    }
+
+    /**
+     * Scope to filter by contract type
+     *
+     * @param Builder<Contract> $query
+     * @param int $contractTypeId
+     * @return Builder<Contract>
+     */
+    public function scopeByType(Builder $query, int $contractTypeId): Builder
+    {
+        return $query->where('contract_type_id', $contractTypeId);
+    }
+
+    /**
+     * Check if contract is active
+     */
+    public function isActive(): bool
+    {
+        return (bool) $this->is_active;
+    }
+
+    /**
+     * Check if contract belongs to branch (helper for authorization)
+     */
+    public function belongsToBranch(int $branchId): bool
+    {
+        return $this->branch_id === $branchId;
+    }
+
+    /**
+     * Count active versions for this contract
+     */
+    public function activeVersionCount(): int
+    {
+        return $this->versions()
+            ->whereNull('deleted_at')
+            ->count();
+    }
+
+    /**
+     * Count active reminders for this contract
+     */
+    public function activeReminderCount(): int
+    {
+        return $this->reminders()
+            ->whereNull('deleted_at')
+            ->count();
+    }
 }

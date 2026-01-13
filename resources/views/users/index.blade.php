@@ -94,7 +94,7 @@
         <form method="GET" action="{{ route('users.index') }}" id="searchForm" style="display:flex;gap:12px;align-items:flex-end; flex-wrap:wrap;">
             <input type="hidden" name="status" value="{{ $status ?? 'all' }}">
             <input type="hidden" name="per_page" id="searchPerPage" value="{{ request()->query('per_page', 10) }}">
-            <input type="text" name="search" id="userSearchInput" value="{{ $search }}" placeholder="Search by name, mobile, or email..." oninput="debouncedSearch()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
+            <input type="text" name="search" id="userSearchInput" value="{{ $search }}" placeholder="Search by name, mobile, or email..." oninput="debouncedUserSearch()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
         </form>
 
         @if(env('DEV_SHOW_ACTIONS', false) || auth()->user()->can('create', \App\Models\User::class))
@@ -113,7 +113,7 @@
 
     <script>
         let __userSearchTimer = null;
-        function debouncedSearch() {
+        function debouncedUserSearch() {
             clearTimeout(__userSearchTimer);
             __userSearchTimer = setTimeout(() => { ajaxFetchUsers(1); }, 300);
         }

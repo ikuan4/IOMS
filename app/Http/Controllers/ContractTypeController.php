@@ -251,12 +251,96 @@ class ContractTypeController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        // Requirement: allow deleting contract type if it only has inactive contracts.
+        // Block deletion only when ACTIVE (not-deleted) contracts exist.
+        // Note: Modal validation should prevent reaching here if dependencies exist
+        $activeContractCount = $contractType->contracts()
+            ->where('is_active', true)
+            ->whereNull('deleted_at')
+            ->count();
+
+        if ($activeContractCount > 0) {
+            // Fallback validation (should not reach here if modal is used)
+            return redirect()
+                ->route('contract-types.index')
+                ->with('error', 'Cannot delete contract type due to active dependencies.');
+        }
+
         $name = $contractType->name;
         $contractType->delete();
 
         return redirect()
             ->route('contract-types.index')
             ->with('deleted', 'Contract type "' . $name . '" deleted successfully.');
+    }
+
+    /**
+     * Check if a contract type can be deleted (check for dependencies)
+     */
+    public function checkDeleteDependencies(ContractType $contractType): \Illuminate\Http\JsonResponse
+    {
+        $user = Auth::user();
+        if (!$user || !$user->hasPermission('contract-types.view')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        // Ensure user can only check contract types from their branch
+        if (!$user->isSuperAdmin() && $contractType->branch_id !== $user->branch_id) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        // Performance: count() + small samples
+        // Requirement: only ACTIVE contracts block deletion.
+        $activeContractsQuery = $contractType->contracts()
+            ->where('is_active', true)
+            ->whereNull('deleted_at');
+
+        $activeContractCount = (clone $activeContractsQuery)->count();
+        $activeContractsSample = (clone $activeContractsQuery)
+            ->orderBy('id')
+            ->limit(5)
+            ->get(['id', 'contract_number', 'contract_with']);
+
+        $inactiveContractCount = $contractType->contracts()
+            ->where('is_active', false)
+            ->whereNull('deleted_at')
+            ->count();
+
+        $canDelete = $activeContractCount === 0;
+
+        $dependencies = [];
+        if ($activeContractCount > 0) {
+            $dependencies[] = [
+                'type' => 'active_contracts',
+                'count' => $activeContractCount,
+                'message' => 'Active contracts using this contract type',
+                'items' => $activeContractsSample->map(fn($c) => [
+                    'id' => $c->id,
+                    'name' => $c->contract_number . ' - ' . $c->contract_with
+                ])->toArray(),
+            ];
+        }
+
+        // Inactive contracts do not block deletion; include counts for UX.
+        if ($inactiveContractCount > 0) {
+            $dependencies[] = [
+                'type' => 'inactive_contracts_info',
+                'count' => $inactiveContractCount,
+                'message' => 'Inactive contracts using this type (allowed)',
+                'items' => [],
+            ];
+        }
+
+        $errorMessage = 'Contract type can be deleted safely.';
+        if (!$canDelete && $activeContractCount > 0) {
+            $errorMessage = "Cannot delete contract type '{$contractType->name}' because it has {$activeContractCount} active contract" . ($activeContractCount > 1 ? 's' : '') . ". Please set them inactive or delete them first.";
+        }
+
+        return response()->json([
+            'can_delete' => $canDelete,
+            'dependencies' => $dependencies,
+            'message' => $errorMessage
+        ]);
     }
 
     /**

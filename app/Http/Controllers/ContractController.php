@@ -238,6 +238,11 @@ class ContractController extends Controller
             /** @var ContractType $type */
             $type = ContractType::findOrFail($data['contract_type_id']);
 
+            // Validate contract type is active
+            if (!$type->is_active || $type->trashed()) {
+                throw new \Exception('Cannot create contract because the selected contract type is inactive or deleted.');
+            }
+
             // Create contract with temporary number
             $contract = new Contract();
             $contract->branch_id = (int)$branchId;
@@ -456,6 +461,15 @@ class ContractController extends Controller
         $userId = Auth::id();
 
         DB::transaction(function () use ($request, $contract, $data, $userId) {
+            // Validate contract type is active when activating contract
+            if ($request->boolean('is_active')) {
+                /** @var ContractType|null $contractType */
+                $contractType = ContractType::withTrashed()->find($data['contract_type_id']);
+                if (!$contractType || !$contractType->is_active || $contractType->trashed()) {
+                    throw new \Exception('Cannot activate contract because the selected contract type is inactive or deleted.');
+                }
+            }
+
             $contract->contract_type_id = $data['contract_type_id'];
             $contract->contract_with = $data['contract_with'];
             $contract->grace_period_days = $data['grace_period_days'];
@@ -588,6 +602,11 @@ class ContractController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        // Optional: Check if contract has dependencies that should block deletion
+        // In this case, we allow deletion even with versions/reminders as they cascade/orphan
+        // This follows the pattern where child records don't strictly block parent deletion
+        // when properly handled by database constraints and relationships
+
         $contract->delete();
 
         return redirect()
@@ -614,6 +633,22 @@ class ContractController extends Controller
         }
 
         if ($contract->trashed()) {
+            // Check if contract type is active and not deleted
+            $contractType = $contract->contractType()->withTrashed()->first();
+            if (!$contractType || $contractType->trashed() || !$contractType->is_active) {
+                return redirect()
+                    ->route('contracts.index', ['status' => 'deleted'])
+                    ->with('error', 'Cannot restore contract because the contract type is inactive or deleted.');
+            }
+
+            // Check if branch is active and not deleted
+            $branch = $contract->branch()->withTrashed()->first();
+            if (!$branch || $branch->trashed()) {
+                return redirect()
+                    ->route('contracts.index', ['status' => 'deleted'])
+                    ->with('error', 'Cannot restore contract because the branch is deleted.');
+            }
+
             $contract->restoreWithUser();
 
             // Auto-mark past reminders as sent

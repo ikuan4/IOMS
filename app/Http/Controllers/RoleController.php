@@ -302,7 +302,7 @@ class RoleController extends Controller
             }
             $role->save();
         } catch (\Throwable $e) {
-            Log::warning('Failed to assign branch on role update: ' . $e->getMessage());
+            // Silently handle branch assignment failure
         }
 
         return redirect()->route('roles.index')
@@ -315,25 +315,27 @@ class RoleController extends Controller
 
         if ($role->isProtected()) {
             return redirect()->route('roles.index')
-                ->with('error', 'Cannot delete protected role: ' . $role->name);
+                ->with('error', 'Cannot delete protected role.');
         }
 
         $currentUser = Auth::user();
         assert($currentUser instanceof User);
         if ($currentUser->role_id === $role->id) {
             return redirect()->route('roles.index')
-                ->with('error', 'You cannot delete your own role.');
+                ->with('error', 'Cannot delete your own role.');
         }
 
         // Requirement: allow deleting role if it only has inactive users.
         // Block deletion only when ACTIVE (not-deleted) users are assigned.
+        // Note: Modal validation should prevent reaching here if dependencies exist
         $activeUserCount = User::where('role_id', $role->id)
             ->where('active', true)
             ->count();
 
         if ($activeUserCount > 0) {
+            // Fallback validation (should not reach here if modal is used)
             return redirect()->route('roles.index')
-                ->with('error', "Cannot delete role '{$role->name}' because it has {$activeUserCount} active user(s). Please set them inactive or delete them first.");
+                ->with('error', 'Cannot delete role due to active dependencies.');
         }
 
         $name = $role->name;
@@ -430,16 +432,19 @@ class RoleController extends Controller
             ];
         }
 
+        $errorMessage = 'Role can be deleted safely.';
+        if (!$canDelete && $activeUserCount > 0) {
+            $errorMessage = "Cannot delete role '{$role->name}' because it has {$activeUserCount} active user" . ($activeUserCount > 1 ? 's' : '') . ". Please set them inactive or delete them first.";
+        }
+
         return response()->json([
             'can_delete' => $canDelete,
             'dependencies' => $dependencies,
-            'message' => $canDelete
-                ? 'Role can be deleted safely.'
-                : 'Cannot delete role. Please set assigned active users inactive or delete them first.'
+            'message' => $errorMessage
         ]);
     }
 
-    public function managePriority(Request $request, Role $role): ContractView
+    public function managePriority(Request $request, Role $role): \Illuminate\Http\Response
     {
         $currentUser = Auth::user();
         assert($currentUser instanceof User);
@@ -453,12 +458,14 @@ class RoleController extends Controller
         $branches = Branch::orderBy('name')->get();
 
         // Determine selected branch: developer may choose via query, others default to their branch
-            if ($isDeveloper) {
-            $selectedBranchId = $request->query('branch_id') ?? $branches->first()?->id;
+        if ($isDeveloper) {
+            // Developer: only pre-select if explicitly passed via query, otherwise null
+            $selectedBranchId = $request->query('branch_id') ? (int)$request->query('branch_id') : null;
             $rolesForView = $selectedBranchId
                 ? Role::where('branch_id', $selectedBranchId)->orderBy('priority', 'asc')->get()
                 : collect([]);
         } else {
+            // Non-developer: auto-select their branch
             $selectedBranchId = $currentUser->branch_id;
 
             // Get user's priority (lower number = higher privilege)
@@ -474,7 +481,13 @@ class RoleController extends Controller
         }
 
         $isHierarchyPage = true;
-        return view('roles.hierarchy', compact('role', 'branches', 'selectedBranchId', 'rolesForView', 'isDeveloper', 'isHierarchyPage'));
+
+        // Prevent browser caching of this page to ensure JavaScript always loads fresh
+        return response()
+            ->view('roles.hierarchy', compact('role', 'branches', 'selectedBranchId', 'rolesForView', 'isDeveloper', 'isHierarchyPage'))
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     // getVisibleRoleTree removed: hierarchy feature deprecated, logic inlined where needed.
@@ -486,12 +499,6 @@ class RoleController extends Controller
         if (!$currentUser->hasPermission('roles.manage-priority')) {
             abort(403, 'Unauthorized action.');
         }
-
-        // Log the request data for debugging
-        \Log::info('updatePriority called', [
-            'all_data' => $request->all(),
-            'priorities_param' => $request->input('priorities'),
-        ]);
 
         $validated = $request->validate([
             'parents' => 'nullable|array',
@@ -508,8 +515,6 @@ class RoleController extends Controller
             $effectiveRole = $currentUser->effectiveRole();
             $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
 
-            \Log::info('Processing priorities', ['priorities' => $priorities, 'count' => count($priorities), 'userPriority' => $userPriority]);
-
             foreach ($priorities as $roleId => $priority) {
                 /** @var Role|null $role */
                 $role = Role::find($roleId);
@@ -522,18 +527,12 @@ class RoleController extends Controller
 
                 // Non-superadmin users can only assign priorities > their own (lower privilege)
                 if (!$currentUser->isSuperAdmin() && (int)$priority <= $userPriority) {
-                    \Log::warning("User attempted to assign invalid priority", [
-                        'role_id' => $roleId,
-                        'attempted_priority' => $priority,
-                        'user_priority' => $userPriority
-                    ]);
                     continue;
                 }
 
                 $old = $role->priority ?? null;
                 $role->priority = (int)$priority;
                 $role->save();
-                \Log::info("Updated role {$roleId}", ['old' => $old, 'new' => $role->priority]);
                 if ($old !== $role->priority) $updatedCount++;
             }
 
@@ -625,21 +624,12 @@ class RoleController extends Controller
     {
         $this->authorize('updatePermissions', $role);
 
-        Log::info('updatePermissions called', [
-            'role_id' => $role->id,
-            'role_name' => $role->name,
-            'request_permissions' => $request->input('permissions'),
-            'request_all' => $request->all(),
-        ]);
-
         $validated = $request->validate([
             'permissions' => 'nullable|array',
             'permissions.*' => 'exists:permissions,id',
         ]);
 
         $requestedPermissions = $validated['permissions'] ?? [];
-
-        Log::info('After validation', [ 'requestedPermissions' => $requestedPermissions, ]);
 
         $currentUser = Auth::user();
         assert($currentUser instanceof User);
@@ -652,14 +642,7 @@ class RoleController extends Controller
 
             $invalidPermissions = array_diff($requestedPermissions, $userPermissionIds);
 
-            Log::info('Permission validation', [
-                'requestedPermissions' => $requestedPermissions,
-                'invalidPermissions' => $invalidPermissions,
-                'hiddenPermissions' => $hiddenPermissions,
-            ]);
-
             if (!empty($invalidPermissions)) {
-                Log::warning('User tried to grant permissions they dont have', [ 'invalidPermissions' => $invalidPermissions, ]);
                 return redirect()->back()
                     ->with('error', 'You cannot grant permissions that you do not have.');
             }
@@ -667,16 +650,10 @@ class RoleController extends Controller
             $requestedPermissions = array_unique(array_merge($requestedPermissions, $hiddenPermissions));
         }
 
-        Log::info('Before syncPermissions', [ 'final_requestedPermissions' => $requestedPermissions, ]);
-
         $oldPermissions = $role->permissions()->pluck('permissions.id')->toArray();
-
-        Log::info('Calling syncPermissions', [ 'role_id' => $role->id, 'oldPermissions' => $oldPermissions, 'newPermissions' => $requestedPermissions, ]);
 
         $permissions = Permission::whereIn('id', $requestedPermissions)->get();
         $role->syncPermissions($permissions);
-
-        Log::info('After syncPermissions', [ 'role_id' => $role->id, 'permissions_count' => $role->permissions()->count(), 'permissions' => $role->permissions()->pluck('id')->toArray(), ]);
 
         if ($oldPermissions !== $requestedPermissions) {
             AuditLog::log(

@@ -39,6 +39,9 @@ class DatabaseSeeder extends Seeder
         $this->call(\Database\Seeders\DummyRolesSeeder::class);
         $this->call(\Database\Seeders\DummyUsersSeeder::class);
 
+        // Create contracts, contract types, and notification recipients
+        $this->call(\Database\Seeders\ContractsSeeder::class);
+
         // Canonical permissions seeder (run manually when ready):
         // $this->call(\Database\Seeders\CanonicalPermissionsSeeder::class);
     }
