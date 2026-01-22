@@ -79,9 +79,11 @@
                     <select name="branch_id" id="contracts_branch_id" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;background-color:var(--card,#fff);color:var(--text,#111827);">
                         <option value="">All Branches</option>
                         @foreach($branches ?? [] as $branch)
-                            <option value="{{ $branch->id }}" {{ request('branch_id') == $branch->id ? 'selected' : '' }}>
-                                {{ $branch->name }}
+                            @if($branch)
+                            <option value="{{ optional($branch)->id }}" {{ optional($branch)->id && request('branch_id') == optional($branch)->id ? 'selected' : '' }}>
+                                {{ optional($branch)->name }}
                             </option>
+                            @endif
                         @endforeach
                     </select>
                 </div>
@@ -93,9 +95,11 @@
                 <select name="contract_type_id" id="contracts_contract_type_id" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;background-color:var(--card,#fff);color:var(--text,#111827);">
                     <option value="">All Types</option>
                     @foreach($contractTypes ?? [] as $type)
-                        <option value="{{ $type->id }}" {{ request('contract_type_id') == $type->id ? 'selected' : '' }}>
-                            {{ $type->name }}
+                        @if($type)
+                        <option value="{{ optional($type)->id }}" {{ optional($type)->id && request('contract_type_id') == optional($type)->id ? 'selected' : '' }}>
+                            {{ optional($type)->name }}
                         </option>
+                        @endif
                     @endforeach
                 </select>
             </div>
@@ -173,10 +177,10 @@
                                 <td style="padding:14px 20px;">
                                     <span style="font-size:15px;font-weight:600;color:#0B6BBD;">{{ $contract->contract_number }}</span>
                                 </td>
-                                <td style="padding:14px 20px;font-size:14px;">{{ $contract->contractType->name ?? 'N/A' }}</td>
+                                <td style="padding:14px 20px;font-size:14px;">{{ optional($contract->contractType)->name ?? 'N/A' }}</td>
                                 <td style="padding:14px 20px;font-size:14px;font-weight:500;">{{ $contract->contract_with }}</td>
                                 @if($isSuperAdmin)
-                                    <td style="padding:14px 20px;font-size:14px;color:#6b7280;">{{ $contract->branch->name ?? 'N/A' }}</td>
+                                    <td style="padding:14px 20px;font-size:14px;color:#6b7280;">{{ optional($contract->branch)->name ?? 'N/A' }}</td>
                                 @endif
                                 <td style="padding:14px 20px;font-size:14px;">
                                     {{ $latestVersion ? $latestVersion->start_date->timezone('Asia/Kolkata')->format('d M Y') : 'N/A' }}

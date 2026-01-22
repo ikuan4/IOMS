@@ -226,7 +226,6 @@ class ContractVersionController extends Controller
                         continue;
                     }
 
-                    /** @var ContractVersionFile|null $versionFile */
                     $versionFile = ContractVersionFile::find((int) $fileId);
                     if ($versionFile && $versionFile->contract_version_id === $version->id) {
                         $removed[] = [
@@ -235,9 +234,10 @@ class ContractVersionController extends Controller
                         ];
 
                         // Delete from storage
-                        if ($versionFile->storedFile) {
-                            Storage::disk($versionFile->storedFile->disk)->delete($versionFile->storedFile->path);
-                            $versionFile->storedFile->delete();
+                        $storedFile = $versionFile->storedFile;
+                        if ($storedFile) {
+                            Storage::disk($storedFile->disk)->delete($storedFile->path);
+                            $storedFile->delete();
                         }
                         $versionFile->delete();
                     }

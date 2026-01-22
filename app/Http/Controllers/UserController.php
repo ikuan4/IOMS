@@ -251,7 +251,8 @@ class UserController extends Controller
                 }
                 }
 
-            $user = new User($data);
+            $user = new User();
+            $user->fill($data);
             $user->password   = Hash::make($data['password']);
             $user->active     = $request->boolean('active', true);
             $user->created_by = $actorIdInt;

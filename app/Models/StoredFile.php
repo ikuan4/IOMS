@@ -10,6 +10,28 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Traits\HasAuditFields;
 
+/**
+ * @property int $id
+ * @property int $branch_id
+ * @property string $disk
+ * @property string $path
+ * @property string $original_filename
+ * @property string|null $mime_type
+ * @property int|null $size_bytes
+ * @property string $sha256
+ * @property int|null $created_by
+ * @property int|null $updated_by
+ * @property int|null $deleted_by
+ * @property int|null $restored_by
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
+ * @property \Illuminate\Support\Carbon|null $restored_at
+ * @property-read string $download_name
+ * @property-read \App\Models\Branch $branch
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\ContractVersionFile> $contractVersionFiles
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, \App\Models\ContractVersion> $contractVersions
+ */
 class StoredFile extends Model
 {
     use HasFactory, SoftDeletes, HasAuditFields;
@@ -79,6 +101,6 @@ class StoredFile extends Model
      */
     public function getDownloadNameAttribute(): string
     {
-        return $this->original_filename ?? basename($this->path);
+        return $this->original_filename ?: basename($this->path);
     }
 }
