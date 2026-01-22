@@ -182,6 +182,24 @@
         background: rgba(239, 68, 68, 0.2);
         color: #fca5a5;
     }
+
+    /* Pagination per-page dropdown: use a custom arrow so we can position it consistently.
+       This targets the shared per-page select used across index/list pages. */
+    select[name="per_page"] {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5.5 7.5L10 12l4.5-4.5' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+        background-repeat: no-repeat !important;
+        background-size: 16px 16px !important;
+        /* move arrow left by +4px (increase right inset) */
+        background-position: right 26px center !important;
+        padding-right: 56px !important;
+    }
+
+    [data-theme="dark"] select[name="per_page"] {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5.5 7.5L10 12l4.5-4.5' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    }
 </style>
 
 <script>

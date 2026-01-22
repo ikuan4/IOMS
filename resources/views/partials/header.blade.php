@@ -98,18 +98,11 @@
 
                 <div class="user-menu-dropdown" id="userMenuDropdown" role="menu">
 
-                    {{-- Profile/Update Profile (different route for developer) --}}
-                    @if($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-                        <a href="{{ route('profile.edit') }}" class="dropdown-item" role="menuitem">
-                            <span data-feather="user"></span>
-                            <span>Profile</span>
-                        </a>
-                    @else
-                        <a href="{{ route('users.edit', $user->id) }}" class="dropdown-item" role="menuitem">
-                            <span data-feather="user"></span>
-                            <span>Update Profile</span>
-                        </a>
-                    @endif
+                    {{-- Self profile --}}
+                    <a href="{{ route('profile.edit') }}" class="dropdown-item" role="menuitem">
+                        <span data-feather="user"></span>
+                        <span>Update Profile</span>
+                    </a>
 
                     {{-- Divider + Logout --}}
                     <div class="dropdown-divider" aria-hidden="true"></div>

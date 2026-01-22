@@ -48,7 +48,7 @@
 @section('content')
     <div class="header-card">
         <div class="header-left">
-            <h2>Developer Profile</h2>
+            <h2>My Profile</h2>
             <p class="muted">Update your photo, name, email and password.</p>
         </div>
     </div>
@@ -103,7 +103,7 @@
                     </div>
 
                     <div style="padding:12px;background:var(--warning-bg,#fef3c7);border-radius:8px;border:1px solid var(--warning-border,#fbbf24);color:var(--warning-text,#78350f);">
-                        <strong>Developer Note:</strong> Your role and branch cannot be changed via this form. Role: <strong>null (Developer)</strong>, Branch: <strong>null (All)</strong>
+                        <strong>Note:</strong> Your role and branch cannot be changed via this form.
                     </div>
 
                     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
@@ -226,12 +226,12 @@
 
             if (files.length > 0) {
                 const file = files[0];
-                
+
                 // Create a new FileList-like object and assign to input
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
                 avatarInput.files = dataTransfer.files;
-                
+
                 // Preview the file
                 previewFile(file);
             }

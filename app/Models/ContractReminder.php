@@ -5,17 +5,23 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Traits\HasAuditFields;
 
 class ContractReminder extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes, HasAuditFields;
 
     protected $fillable = [
         'contract_id',
         'days_before_end',
         'is_sent',
         'sent_at',
+        'created_by',
+        'updated_by',
+        'deleted_by',
+        'restored_by',
     ];
 
     protected $casts = [
@@ -23,6 +29,12 @@ class ContractReminder extends Model
         'is_sent' => 'boolean',
         'sent_at' => 'datetime',
         'contract_id' => 'integer',
+        'created_by' => 'integer',
+        'updated_by' => 'integer',
+        'deleted_by' => 'integer',
+        'restored_by' => 'integer',
+        'restored_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     /**

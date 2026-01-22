@@ -21,7 +21,7 @@
                 <div style="min-width:240px;">
                     @if($isDeveloper ?? false)
                         <form method="GET" action="{{ route('roles.hierarchy', $role->id ?? 0) }}" id="branchForm">
-                            <select name="branch_id" onchange="this.form.submit()" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #d0d7e0;font-size:14px;">
+                            <select name="branch_id" id="branch_id" onchange="this.form.submit()" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #d0d7e0;font-size:14px;background-color:var(--card,#fff);color:var(--text,#111827);">
                                 <option value="">-- Select Branch --</option>
                                 @foreach($branches as $b)
                                     <option value="{{ $b->id }}" {{ isset($selectedBranchId) && (int)$selectedBranchId === $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
@@ -93,6 +93,18 @@
     </div>
 
     <style>
+        /* Custom select arrow so we can control its position (move 10px left) */
+        #branch_id {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%236b7280' d='M5.25 7.5 10 12.25 14.75 7.5l1.5 1.5L10 15.25 3.75 9z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 22px center;
+            background-size: 16px 16px;
+            padding-right: 48px !important;
+        }
+
         .save-hierarchy-btn {
             display: none;
         }

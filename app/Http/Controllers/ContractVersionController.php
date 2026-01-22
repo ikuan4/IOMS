@@ -6,6 +6,7 @@ use App\Models\Contract;
 use App\Models\ContractVersion;
 use App\Models\ContractVersionFile;
 use App\Models\StoredFile;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -78,8 +79,12 @@ class ContractVersionController extends Controller
                 'updated_by'      => ($id = Auth::id()) ? (int) $id : null,
             ]);
 
+            AuditLog::log('create_contract_version', $version, [], $version->toArray());
+
             // Handle file uploads
             if ($request->hasFile('files')) {
+                $addedStoredFileIds = [];
+                $linkedPivotIds = [];
                 foreach ((array) $request->file('files') as $file) {
                     if (!$file || !$file->isValid()) {
                         continue;
@@ -104,12 +109,24 @@ class ContractVersionController extends Controller
                             'size_bytes' => $file->getSize(),
                             'sha256' => $sha256,
                         ]);
+
+                        $addedStoredFileIds[] = $storedFile->getKey();
                     }
 
                     // Link file to version
-                    ContractVersionFile::create([
+                    $pivot = ContractVersionFile::create([
                         'contract_version_id' => $version->id,
                         'stored_file_id'      => $storedFile->id,
+                    ]);
+
+                    $linkedPivotIds[] = $pivot->getKey();
+                }
+
+                if ($addedStoredFileIds !== [] || $linkedPivotIds !== []) {
+                    AuditLog::log('add_contract_version_files', $version, [], [
+                        'contract_id' => $contract->getKey(),
+                        'stored_file_ids' => $addedStoredFileIds,
+                        'contract_version_file_ids' => $linkedPivotIds,
                     ]);
                 }
             }
@@ -185,6 +202,8 @@ class ContractVersionController extends Controller
 
         DB::beginTransaction();
         try {
+            $oldValues = $version->toArray();
+
             // Convert IST to UTC for storage
             $startUtc = Carbon::parse($validated['start_date'], 'Asia/Kolkata')->setTimezone('UTC');
             $endUtc = Carbon::parse($validated['end_date'], 'Asia/Kolkata')->setTimezone('UTC');
@@ -197,8 +216,11 @@ class ContractVersionController extends Controller
                 'updated_by'  => ($id = Auth::id()) ? (int) $id : null,
             ]);
 
+            AuditLog::log('update_contract_version', $version, $oldValues, $version->fresh()?->toArray() ?? []);
+
             // Handle file removals
             if (!empty($validated['remove_files'])) {
+                $removed = [];
                 foreach ($validated['remove_files'] as $fileId) {
                     if (empty($fileId) || !is_numeric($fileId)) {
                         continue;
@@ -207,6 +229,11 @@ class ContractVersionController extends Controller
                     /** @var ContractVersionFile|null $versionFile */
                     $versionFile = ContractVersionFile::find((int) $fileId);
                     if ($versionFile && $versionFile->contract_version_id === $version->id) {
+                        $removed[] = [
+                            'contract_version_file_id' => $versionFile->getKey(),
+                            'stored_file_id' => $versionFile->stored_file_id,
+                        ];
+
                         // Delete from storage
                         if ($versionFile->storedFile) {
                             Storage::disk($versionFile->storedFile->disk)->delete($versionFile->storedFile->path);
@@ -215,10 +242,16 @@ class ContractVersionController extends Controller
                         $versionFile->delete();
                     }
                 }
+
+                if ($removed !== []) {
+                    AuditLog::log('remove_contract_version_files', $version, [], ['removed' => $removed]);
+                }
             }
 
             // Handle new file uploads
             if ($request->hasFile('files')) {
+                $addedStoredFileIds = [];
+                $linkedPivotIds = [];
                 foreach ((array) $request->file('files') as $file) {
                     if (!$file || !$file->isValid()) {
                         continue;
@@ -243,12 +276,24 @@ class ContractVersionController extends Controller
                             'size_bytes' => $file->getSize(),
                             'sha256' => $sha256,
                         ]);
+
+                        $addedStoredFileIds[] = $storedFile->getKey();
                     }
 
                     // Link file to version
-                    ContractVersionFile::create([
+                    $pivot = ContractVersionFile::create([
                         'contract_version_id' => $version->id,
                         'stored_file_id'      => $storedFile->id,
+                    ]);
+
+                    $linkedPivotIds[] = $pivot->getKey();
+                }
+
+                if ($addedStoredFileIds !== [] || $linkedPivotIds !== []) {
+                    AuditLog::log('add_contract_version_files', $version, [], [
+                        'contract_id' => $contract->getKey(),
+                        'stored_file_ids' => $addedStoredFileIds,
+                        'contract_version_file_ids' => $linkedPivotIds,
                     ]);
                 }
             }
@@ -295,8 +340,13 @@ class ContractVersionController extends Controller
                 ->withErrors(['error' => 'Cannot delete the only version of this contract.']);
         }
 
+        $oldValues = $version->toArray();
+
         // Soft delete the version
         $version->delete();
+
+        $after = ContractVersion::withTrashed()->find($version->getKey());
+        AuditLog::log('delete_contract_version', $version, $oldValues, $after?->toArray() ?? []);
 
         // Reload contract to check status
         $contract->refresh();
@@ -327,8 +377,16 @@ class ContractVersionController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $version->update(['restored_by' => ($id = Auth::id()) ? (int) $id : null]);
-        $version->restore();
+        $oldValues = $version->toArray();
+
+        if (method_exists($version, 'restoreWithUser')) {
+            $version->restoreWithUser();
+        } else {
+            $version->update(['restored_by' => ($id = Auth::id()) ? (int) $id : null]);
+            $version->restore();
+        }
+
+        AuditLog::log('restore_contract_version', $version, $oldValues, $version->fresh()?->toArray() ?? []);
 
         return redirect()
             ->route('contracts.show', $contract->id)
@@ -357,6 +415,9 @@ class ContractVersionController extends Controller
 
         $storedFile = $file->storedFile;
 
+        $oldValues = $file->toArray();
+        $oldStored = $storedFile ? $storedFile->toArray() : null;
+
         // Delete the pivot record
         $file->delete();
 
@@ -367,6 +428,12 @@ class ContractVersionController extends Controller
             }
             $storedFile->delete();
         }
+
+        AuditLog::log('delete_contract_version_file', $file, $oldValues, [
+            'contract_id' => $contract->getKey(),
+            'contract_version_id' => $version->getKey(),
+            'stored_file' => $oldStored,
+        ]);
 
         return redirect()
             ->route('contracts.versions.edit', [$contract, $version])

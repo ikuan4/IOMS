@@ -2,6 +2,8 @@
 // DASHBOARD PAGE JS (collapse/expand + theme toggle + JS-assisted hover push)
 // Robust, idempotent and compatible with Vite HMR.
 
+import './tickets-attachments';
+
 document.addEventListener("DOMContentLoaded", () => {
 
   // Contract Version actions (works with SPA navigation because it's delegated)
@@ -356,6 +358,42 @@ document.addEventListener("DOMContentLoaded", () => {
     contractMgmtToggle.addEventListener("click", () => {
       const isOpen = contractMgmtGroup.classList.toggle("open");
       contractMgmtToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+  }
+
+  /* -----------------------------
+     Collapsible "Ticket Management" group
+  ----------------------------- */
+  const ticketMgmtGroup = document.getElementById("nav-ticket-mgmt");
+  const ticketMgmtToggle = document.getElementById("nav-ticket-mgmt-toggle");
+  const ticketMgmtSubmenu = document.getElementById("nav-ticket-mgmt-submenu");
+
+  if (ticketMgmtGroup && ticketMgmtToggle && ticketMgmtSubmenu) {
+    // sync initial aria-expanded with server-rendered "open" class
+    const initiallyOpenTickets = ticketMgmtGroup.classList.contains("open");
+    ticketMgmtToggle.setAttribute("aria-expanded", initiallyOpenTickets ? "true" : "false");
+
+    ticketMgmtToggle.addEventListener("click", () => {
+      const isOpen = ticketMgmtGroup.classList.toggle("open");
+      ticketMgmtToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+  }
+
+  /* -----------------------------
+     Collapsible "Audit Logs" group
+  ----------------------------- */
+  const auditLogsGroup = document.getElementById("nav-audit-logs");
+  const auditLogsToggle = document.getElementById("nav-audit-logs-toggle");
+  const auditLogsSubmenu = document.getElementById("nav-audit-logs-submenu");
+
+  if (auditLogsGroup && auditLogsToggle && auditLogsSubmenu) {
+    // sync initial aria-expanded with server-rendered "open" class
+    const initiallyOpenAuditLogs = auditLogsGroup.classList.contains("open");
+    auditLogsToggle.setAttribute("aria-expanded", initiallyOpenAuditLogs ? "true" : "false");
+
+    auditLogsToggle.addEventListener("click", () => {
+      const isOpen = auditLogsGroup.classList.toggle("open");
+      auditLogsToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
     });
   }
 

@@ -83,7 +83,8 @@ class ContractVersion extends Model
         return $this->belongsToMany(
             StoredFile::class,
             'contract_version_files'
-        )->withPivot('display_order')
+        )->wherePivotNull('deleted_at')
+            ->withPivot('display_order')
             ->withTimestamps();
     }
 

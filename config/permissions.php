@@ -25,6 +25,23 @@ return [
         'branches' => [
             'branches.view', 'branches.create', 'branches.update', 'branches.delete', 'branches.restore', 'branches.export'
         ],
+
+        'tickets' => [
+            'tickets.view',
+            'tickets.pending.view',
+            'tickets.create',
+            'tickets.edit',
+            'tickets.delete',
+            'tickets.restore'
+        ],
+
+        'ticket-types' => [
+            'ticket-types.view', 'ticket-types.create', 'ticket-types.edit', 'ticket-types.delete', 'ticket-types.restore'
+        ],
+
+        'ticket-modules' => [
+            'ticket-modules.view', 'ticket-modules.create', 'ticket-modules.edit', 'ticket-modules.delete', 'ticket-modules.restore'
+        ],
     ],
 
     // Aliases map: old or alternative slugs => canonical slug

@@ -10,6 +10,29 @@ use Illuminate\Support\Facades\Schema;
 trait HasAuditFields
 {
     /**
+     * Cache of table/column existence checks.
+     *
+     * @var array<string, bool>
+     */
+    protected static array $auditColumnExistsCache = [];
+
+    protected static function auditColumnExists(Model $model, string $column): bool
+    {
+        $table = $model->getTable();
+        $key = $table . ':' . $column;
+
+        if (array_key_exists($key, self::$auditColumnExistsCache)) {
+            return self::$auditColumnExistsCache[$key];
+        }
+
+        try {
+            return self::$auditColumnExistsCache[$key] = Schema::hasColumn($table, $column);
+        } catch (\Throwable $__e) {
+            return self::$auditColumnExistsCache[$key] = false;
+        }
+    }
+
+    /**
      * Boot the trait
      */
     protected static function bootHasAuditFields(): void
@@ -17,15 +40,21 @@ trait HasAuditFields
         // Set created_by and updated_by on creating
         static::creating(function (Model $model) {
             if (Auth::check()) {
-                $model->setAttribute('created_by', Auth::id());
-                $model->setAttribute('updated_by', Auth::id());
+                if (self::auditColumnExists($model, 'created_by')) {
+                    $model->setAttribute('created_by', Auth::id());
+                }
+                if (self::auditColumnExists($model, 'updated_by')) {
+                    $model->setAttribute('updated_by', Auth::id());
+                }
             }
         });
 
         // Set updated_by on updating
         static::updating(function (Model $model) {
             if (Auth::check()) {
-                $model->setAttribute('updated_by', Auth::id());
+                if (self::auditColumnExists($model, 'updated_by')) {
+                    $model->setAttribute('updated_by', Auth::id());
+                }
             }
         });
 
@@ -53,8 +82,11 @@ trait HasAuditFields
                 // Check if this is a force delete operation
                 $forceDeleting = method_exists($model, 'isForceDeleting') ? $model->isForceDeleting() : false;
                 if (!$forceDeleting) {
-                    $model->setAttribute($model->getDeletedByColumn(), (int) Auth::id());
-                    $model->saveQuietly(); // Save without triggering events again
+                    $deletedByColumn = $model->getDeletedByColumn();
+                    if (is_string($deletedByColumn) && self::auditColumnExists($model, $deletedByColumn)) {
+                        $model->setAttribute($deletedByColumn, (int) Auth::id());
+                        $model->saveQuietly(); // Save without triggering events again
+                    }
                 }
             }
         });
@@ -114,7 +146,9 @@ trait HasAuditFields
     public function restoreWithUser(): ?bool
     {
         if (Auth::check()) {
-            $this->setAttribute('restored_by', (int) Auth::id());
+            if (self::auditColumnExists($this, 'restored_by')) {
+                $this->setAttribute('restored_by', (int) Auth::id());
+            }
 
             if (isset($this->name) && str_starts_with($this->name, 'Deleted ')) {
                 $this->setAttribute('name', substr($this->name, 8));

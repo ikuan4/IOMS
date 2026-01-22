@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Branch;
@@ -48,6 +49,18 @@ class UserController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * Remove sensitive fields from audit payloads.
+     *
+     * @param array<string,mixed> $values
+     * @return array<string,mixed>
+     */
+    private function sanitizeUserAuditValues(array $values): array
+    {
+        unset($values['password'], $values['remember_token']);
+        return $values;
     }
 
     /* -------------------------------------------------------------
@@ -253,6 +266,13 @@ class UserController extends Controller
             $user->branch_id = $request->input('branch_id') ?? $role->branch_id ?? null;
             $user->save();
 
+            AuditLog::log(
+                'create_user',
+                $user,
+                [],
+                $this->sanitizeUserAuditValues($user->toArray())
+            );
+
             return redirect()->route('users.index')
                 ->with('status', 'User "' . $user->name . '" created successfully.');
         });
@@ -333,7 +353,9 @@ class UserController extends Controller
         }
 
         // Use transaction with role status re-check
-        return DB::transaction(function () use ($request, $data, $user, $role, $actorIdInt) {
+        $oldValues = $this->sanitizeUserAuditValues($user->toArray());
+
+        return DB::transaction(function () use ($request, $data, $user, $role, $actorIdInt, $oldValues) {
             // Re-check role status inside transaction
             $role = Role::withTrashed()->lockForUpdate()->find($data['role_id']);
 
@@ -379,6 +401,13 @@ class UserController extends Controller
             $user->updated_by = $actorIdInt;
             $user->save();
 
+            AuditLog::log(
+                'update_user',
+                $user,
+                $oldValues,
+                $this->sanitizeUserAuditValues($user->fresh()?->toArray() ?? [])
+            );
+
             return redirect()->route('users.index')
                 ->with('status', 'User "' . $user->name . '" updated successfully.');
         });
@@ -390,6 +419,8 @@ class UserController extends Controller
     public function destroy(User $user): RedirectResponse
     {
         $this->authorize('delete', $user);
+
+        $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
         $actorId = Auth::id();
         /** @var int<0, max>|null $actorIdInt */
@@ -404,6 +435,10 @@ class UserController extends Controller
         $user->save();
         $user->delete();
 
+        $after = User::withTrashed()->find($user->getKey());
+        $afterValues = $after ? $this->sanitizeUserAuditValues($after->toArray()) : [];
+        AuditLog::log('delete_user', $user, $oldValues, $afterValues);
+
         return back()->with('deleted', 'User deleted successfully.');
     }
 
@@ -416,11 +451,6 @@ class UserController extends Controller
 
         if (!$user) {
             abort(403);
-        }
-
-        // Only allow if user is developer (no role_id and no branch_id)
-        if (!$user->isSuperAdmin()) {
-            abort(403, 'Unauthorized. Profile editing is only for developer user.');
         }
 
         return view('users.profile', compact('user'));
@@ -437,18 +467,16 @@ class UserController extends Controller
             abort(403);
         }
 
-        // Only allow if user is developer (no role_id and no branch_id)
-        if (!$user->isSuperAdmin()) {
-            abort(403, 'Unauthorized. Profile updates are only for developer user.');
-        }
-
         $data = $request->validate([
             'name'     => ['required', 'string', 'max:255'],
-            'email'    => ['nullable', 'email', Rule::unique('users', 'email')->whereNotNull('email')->ignore($user->id)],
+            // keep backward compatible: allow blank to preserve current value
+            'email'    => ['nullable', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', 'min:8'],
             'avatar'   => ['nullable', 'image', 'max:2048'],
             'remove_avatar' => ['nullable', 'boolean'],
         ]);
+
+        $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
         $user->name = $data['name'];
         $user->email = $data['email'] ?? $user->email;
@@ -481,6 +509,13 @@ class UserController extends Controller
         $user->updated_by = $user->id;
         $user->save();
 
+        AuditLog::log(
+            'update_user_profile',
+            $user,
+            $oldValues,
+            $this->sanitizeUserAuditValues($user->fresh()?->toArray() ?? [])
+        );
+
         return redirect()->route('profile.edit')
             ->with('status', 'Profile updated successfully.');
     }
@@ -491,6 +526,8 @@ class UserController extends Controller
     public function restore(Request $request, int $id): RedirectResponse
     {
         $user = User::withTrashed()->findOrFail($id);
+
+        $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
         $role = Role::withTrashed()->find($user->role_id);
 
@@ -516,19 +553,34 @@ class UserController extends Controller
             }
         }
 
-        $user->restore();
+        if ($user->trashed()) {
+            if (method_exists($user, 'restoreWithUser')) {
+                $user->restoreWithUser();
+            } else {
+                $user->restore();
+            }
 
-        $actorId = Auth::id();
-        /** @var int<0, max>|null $actorIdInt */
-        $actorIdInt = null;
-        if (is_int($actorId)) {
-            $actorIdInt = $actorId;
-        } elseif (is_string($actorId) && ctype_digit($actorId)) {
-            $actorIdInt = (int) $actorId;
+            $actorId = Auth::id();
+            /** @var int<0, max>|null $actorIdInt */
+            $actorIdInt = null;
+            if (is_int($actorId)) {
+                $actorIdInt = $actorId;
+            } elseif (is_string($actorId) && ctype_digit($actorId)) {
+                $actorIdInt = (int) $actorId;
+            }
+
+            // Keep updated_by aligned with the restore actor.
+            try {
+                $user->updated_by = $actorIdInt;
+                $user->save();
+            } catch (\Throwable $__e) {
+                // ignore
+            }
+
+            $after = User::withTrashed()->find($user->getKey());
+            $afterValues = $after ? $this->sanitizeUserAuditValues($after->toArray()) : [];
+            AuditLog::log('restore_user', $user, $oldValues, $afterValues);
         }
-
-        $user->restored_by = $actorIdInt;
-        $user->save();
 
         return back()->with('status', 'User restored successfully.');
     }

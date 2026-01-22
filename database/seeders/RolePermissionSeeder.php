@@ -73,6 +73,28 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'Edit Recipient Details', 'slug' => 'notification-recipients.edit', 'group' => 'notifications', 'guard_name' => 'web'],
             ['name' => 'Delete Recipients', 'slug' => 'notification-recipients.delete', 'group' => 'notifications', 'guard_name' => 'web'],
             ['name' => 'Manage Notifications', 'slug' => 'notifications.manage', 'group' => 'notifications', 'guard_name' => 'web'],
+
+            // Tickets
+            ['name' => 'View Tickets', 'slug' => 'tickets.view', 'group' => 'tickets', 'guard_name' => 'web'],
+            ['name' => 'View Pending Tickets', 'slug' => 'tickets.pending.view', 'group' => 'tickets', 'guard_name' => 'web'],
+            ['name' => 'Create Tickets', 'slug' => 'tickets.create', 'group' => 'tickets', 'guard_name' => 'web'],
+            ['name' => 'Edit Tickets', 'slug' => 'tickets.edit', 'group' => 'tickets', 'guard_name' => 'web'],
+            ['name' => 'Delete Tickets', 'slug' => 'tickets.delete', 'group' => 'tickets', 'guard_name' => 'web'],
+            ['name' => 'Restore Tickets', 'slug' => 'tickets.restore', 'group' => 'tickets', 'guard_name' => 'web'],
+
+            // Ticket Types
+            ['name' => 'View Ticket Types', 'slug' => 'ticket-types.view', 'group' => 'ticket-types', 'guard_name' => 'web'],
+            ['name' => 'Create Ticket Types', 'slug' => 'ticket-types.create', 'group' => 'ticket-types', 'guard_name' => 'web'],
+            ['name' => 'Edit Ticket Types', 'slug' => 'ticket-types.edit', 'group' => 'ticket-types', 'guard_name' => 'web'],
+            ['name' => 'Delete Ticket Types', 'slug' => 'ticket-types.delete', 'group' => 'ticket-types', 'guard_name' => 'web'],
+            ['name' => 'Restore Ticket Types', 'slug' => 'ticket-types.restore', 'group' => 'ticket-types', 'guard_name' => 'web'],
+
+            // Ticket Modules
+            ['name' => 'View Ticket Modules', 'slug' => 'ticket-modules.view', 'group' => 'ticket-modules', 'guard_name' => 'web'],
+            ['name' => 'Create Ticket Modules', 'slug' => 'ticket-modules.create', 'group' => 'ticket-modules', 'guard_name' => 'web'],
+            ['name' => 'Edit Ticket Modules', 'slug' => 'ticket-modules.edit', 'group' => 'ticket-modules', 'guard_name' => 'web'],
+            ['name' => 'Delete Ticket Modules', 'slug' => 'ticket-modules.delete', 'group' => 'ticket-modules', 'guard_name' => 'web'],
+            ['name' => 'Restore Ticket Modules', 'slug' => 'ticket-modules.restore', 'group' => 'ticket-modules', 'guard_name' => 'web'],
         ];
 
         foreach ($permissions as $permission) {

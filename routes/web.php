@@ -5,6 +5,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\RoleController; // Added RoleController import
+use App\Http\Controllers\TicketModuleController;
+use App\Http\Controllers\TicketTypeController;
+use App\Http\Controllers\TicketController;
+use App\Http\Controllers\TicketAttachmentController;
+use App\Http\Controllers\AuditLogController;
 
 // Landing → login page
 Route::get('/', function () {
@@ -158,6 +163,77 @@ Route::middleware('auth')->group(function () {
     // Delete version file
     Route::delete('contracts/{contract}/versions/{version}/files/{file}', [App\Http\Controllers\ContractVersionController::class, 'deleteFile'])
         ->name('contracts.versions.files.destroy');
+});
+
+// Audit Logs (requires auth; super-admin enforced in controller)
+Route::middleware('auth')->group(function () {
+    Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit-logs.index');
+});
+
+// Ticket Management (requires auth)
+Route::middleware('auth')->group(function () {
+    // Ticket Modules
+    Route::resource('ticket-modules', TicketModuleController::class)->except(['show']);
+    Route::get('ticket-modules/{ticketModule}/check-delete-dependencies', [TicketModuleController::class, 'checkDeleteDependencies'])
+        ->name('ticket-modules.check_delete_dependencies');
+    Route::post('ticket-modules/{id}/restore', [TicketModuleController::class, 'restore'])
+        ->name('ticket-modules.restore');
+
+    // Ticket Types
+    Route::resource('ticket-types', TicketTypeController::class)->except(['show']);
+    Route::get('ticket-types/{ticketType}/check-delete-dependencies', [TicketTypeController::class, 'checkDeleteDependencies'])
+        ->name('ticket-types.check_delete_dependencies');
+    Route::post('ticket-types/{id}/restore', [TicketTypeController::class, 'restore'])
+        ->name('ticket-types.restore');
+
+    // Tickets
+    Route::get('tickets/pending', [TicketController::class, 'pending'])
+        ->name('tickets.pending');
+
+    // Ticket attachments (uploads + secure file access)
+    Route::post('tickets/uploads/draft', [TicketAttachmentController::class, 'uploadDraft'])
+        ->name('tickets.uploads.draft');
+
+    Route::post('tickets/uploads/draft/delete', [TicketAttachmentController::class, 'deleteDraft'])
+        ->name('tickets.uploads.draft-delete');
+
+    Route::post('tickets/{ticket}/uploads', [TicketAttachmentController::class, 'uploadTicket'])
+        ->whereNumber('ticket')
+        ->name('tickets.uploads.ticket');
+
+    Route::post('tickets/{ticket}/comments/uploads/draft', [TicketAttachmentController::class, 'uploadCommentDraft'])
+        ->whereNumber('ticket')
+        ->name('tickets.uploads.comment-draft');
+
+    Route::post('tickets/{ticket}/comments/uploads/draft/delete', [TicketAttachmentController::class, 'deleteCommentDraft'])
+        ->whereNumber('ticket')
+        ->name('tickets.uploads.comment-draft-delete');
+
+    Route::get('tickets/{ticket}/files/{storedFile}/inline', [TicketAttachmentController::class, 'inline'])
+        ->whereNumber('ticket')
+        ->whereNumber('storedFile')
+        ->name('tickets.files.inline');
+
+    Route::get('tickets/{ticket}/files/{storedFile}/download', [TicketAttachmentController::class, 'download'])
+        ->whereNumber('ticket')
+        ->whereNumber('storedFile')
+        ->name('tickets.files.download');
+
+    Route::get('tickets/{ticket}', [TicketController::class, 'show'])
+        ->whereNumber('ticket')
+        ->name('tickets.show');
+
+    Route::post('tickets/{ticket}/forward', [TicketController::class, 'forward'])
+        ->whereNumber('ticket')
+        ->name('tickets.forward');
+
+    Route::post('tickets/{ticket}/comments', [TicketController::class, 'comment'])
+        ->whereNumber('ticket')
+        ->name('tickets.comments.store');
+
+    Route::resource('tickets', TicketController::class)->except(['show']);
+    Route::post('tickets/{id}/restore', [TicketController::class, 'restore'])
+        ->name('tickets.restore');
 });
 
 

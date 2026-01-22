@@ -11,6 +11,7 @@ use App\Models\NotificationRecipient;
 use App\Models\StoredFile;
 use App\Models\Branch;
 use App\Models\User;
+use App\Models\AuditLog;
 use App\Exports\ContractExport;
 use App\Mail\ContractExpiryNotification;
 use Illuminate\Http\Request;
@@ -125,7 +126,12 @@ class ContractController extends Controller
         }
 
         // Manual pagination
-        $perPage = 10;
+        $perPageRaw = $request->query('per_page', 10);
+        $perPage = (int) $perPageRaw;
+        $allowedPerPage = [5, 10, 15, 20, 30];
+        if (!in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 10;
+        }
         $page = Paginator::resolveCurrentPage('page');
         $total = $contractsCollection->count();
 
@@ -260,6 +266,8 @@ class ContractController extends Controller
             $contract->contract_number = "CT-{$branchId}/{$type->code}/{$year}/{$contract->id}";
             $contract->save();
 
+            AuditLog::log('create_contract', $contract, [], $contract->toArray());
+
             // Create version 1
             $version = new ContractVersion();
             $version->contract_id = $contract->id;
@@ -271,10 +279,15 @@ class ContractController extends Controller
             $version->updated_by = $userId ? (int)$userId : null;
             $version->save();
 
+            AuditLog::log('create_contract_version', $version, [], $version->toArray());
+
             // Handle file uploads
             if ($request->hasFile('files')) {
                 $files = $request->file('files');
                 $order = 1;
+
+                $addedStoredFileIds = [];
+                $linkedPivotIds = [];
 
                 foreach ($files as $uploadedFile) {
                     if (!$uploadedFile->isValid()) {
@@ -301,12 +314,24 @@ class ContractController extends Controller
                             'size_bytes' => $uploadedFile->getSize(),
                             'sha256' => $sha256,
                         ]);
+
+                        $addedStoredFileIds[] = $stored->getKey();
                     }
 
-                    ContractVersionFile::create([
+                    $pivot = ContractVersionFile::create([
                         'contract_version_id' => $version->id,
                         'stored_file_id' => $stored->id,
                         'display_order' => $order++,
+                    ]);
+
+                    $linkedPivotIds[] = $pivot->getKey();
+                }
+
+                if ($addedStoredFileIds !== [] || $linkedPivotIds !== []) {
+                    AuditLog::log('add_contract_files', $contract, [], [
+                        'contract_version_id' => $version->getKey(),
+                        'stored_file_ids' => $addedStoredFileIds,
+                        'contract_version_file_ids' => $linkedPivotIds,
                     ]);
                 }
             }
@@ -331,6 +356,12 @@ class ContractController extends Controller
                 ]);
             }
 
+            if ($reminderDays !== []) {
+                AuditLog::log('create_contract_reminders', $contract, [], [
+                    'days_before_end' => $reminderDays,
+                ]);
+            }
+
             // Sync recipients
             $recipientInput = $data['recipient_ids'] ?? [];
             if (!is_array($recipientInput)) {
@@ -344,6 +375,10 @@ class ContractController extends Controller
 
             if ($recipientIds !== []) {
                 $contract->notificationRecipients()->sync($recipientIds);
+
+                AuditLog::log('sync_contract_recipients', $contract, [], [
+                    'recipient_ids' => $recipientIds,
+                ]);
             }
         });
 
@@ -460,7 +495,12 @@ class ContractController extends Controller
 
         $userId = Auth::id();
 
-        DB::transaction(function () use ($request, $contract, $data, $userId) {
+        $oldContractValues = $contract->toArray();
+        $oldRecipientIds = $contract->notificationRecipients()->pluck('notification_recipients.id')->all();
+        $oldReminderDays = $contract->reminders()->pluck('days_before_end')->all();
+        sort($oldReminderDays);
+
+        DB::transaction(function () use ($request, $contract, $data, $userId, $oldContractValues, $oldRecipientIds, $oldReminderDays) {
             // Validate contract type is active when activating contract
             if ($request->boolean('is_active')) {
                 /** @var ContractType|null $contractType */
@@ -477,6 +517,8 @@ class ContractController extends Controller
             $contract->updated_by = $userId ? (int)$userId : null;
             $contract->save();
 
+            AuditLog::log('update_contract', $contract, $oldContractValues, $contract->fresh()?->toArray() ?? []);
+
             $version = $contract->latestVersion;
 
             $startIst = Carbon::parse($data['start_date'], 'Asia/Kolkata');
@@ -484,11 +526,15 @@ class ContractController extends Controller
             $startUtc = $startIst->copy()->timezone('UTC');
             $endUtc = $endIst->copy()->timezone('UTC');
 
+            $createdNewVersion = false;
+            $oldVersionValues = $version ? $version->toArray() : [];
+
             if (!$version) {
                 $version = new ContractVersion();
                 $version->contract_id = $contract->id;
                 $version->version_number = 1;
                 $version->created_by = $userId ? (int)$userId : null;
+                $createdNewVersion = true;
             }
 
             $version->description = $data['description'] ?? null;
@@ -497,13 +543,32 @@ class ContractController extends Controller
             $version->updated_by = $userId ? (int)$userId : null;
             $version->save();
 
+            if ($createdNewVersion) {
+                AuditLog::log('create_contract_version', $version, [], $version->toArray());
+            } else {
+                AuditLog::log('update_contract_version', $version, $oldVersionValues, $version->fresh()?->toArray() ?? []);
+            }
+
             // Handle file removals
             if (!empty($data['remove_files'])) {
                 $filesToRemove = array_filter($data['remove_files'], fn($v) => !empty($v));
                 if (!empty($filesToRemove)) {
-                    ContractVersionFile::whereIn('id', $filesToRemove)
+                    $pivots = ContractVersionFile::whereIn('id', $filesToRemove)
                         ->where('contract_version_id', $version->id)
-                        ->delete();
+                        ->get();
+
+                    foreach ($pivots as $pivot) {
+                        try {
+                            $pivot->delete();
+                        } catch (\Throwable $__e) {
+                            // ignore individual failures
+                        }
+                    }
+
+                    AuditLog::log('remove_contract_files', $contract, [], [
+                        'contract_version_id' => $version->getKey(),
+                        'contract_version_file_ids' => array_values(array_map('intval', $filesToRemove)),
+                    ]);
                 }
             }
 
@@ -512,6 +577,9 @@ class ContractController extends Controller
                 $files = $request->file('files');
                 $maxOrder = $version->files()->max('display_order') ?? 0;
                 $order = $maxOrder + 1;
+
+                $addedStoredFileIds = [];
+                $linkedPivotIds = [];
 
                 foreach ($files as $uploadedFile) {
                     if (!$uploadedFile->isValid()) {
@@ -536,18 +604,37 @@ class ContractController extends Controller
                             'size_bytes' => $uploadedFile->getSize(),
                             'sha256' => $sha256,
                         ]);
+
+                        $addedStoredFileIds[] = $stored->getKey();
                     }
 
-                    ContractVersionFile::create([
+                    $pivot = ContractVersionFile::create([
                         'contract_version_id' => $version->id,
                         'stored_file_id' => $stored->id,
                         'display_order' => $order++,
+                    ]);
+
+                    $linkedPivotIds[] = $pivot->getKey();
+                }
+
+                if ($addedStoredFileIds !== [] || $linkedPivotIds !== []) {
+                    AuditLog::log('add_contract_files', $contract, [], [
+                        'contract_version_id' => $version->getKey(),
+                        'stored_file_ids' => $addedStoredFileIds,
+                        'contract_version_file_ids' => $linkedPivotIds,
                     ]);
                 }
             }
 
             // Refresh reminders
-            $contract->reminders()->delete();
+            $existingReminders = $contract->reminders()->get();
+            foreach ($existingReminders as $rem) {
+                try {
+                    $rem->delete();
+                } catch (\Throwable $__e) {
+                    // ignore individual failures
+                }
+            }
 
             $reminderInput = $data['reminder_days'] ?? [];
             if (!is_array($reminderInput)) {
@@ -568,6 +655,16 @@ class ContractController extends Controller
                 ]);
             }
 
+            $newReminderDays = $reminderDays;
+            sort($newReminderDays);
+            if ($oldReminderDays !== $newReminderDays) {
+                AuditLog::log('update_contract_reminders', $contract, [
+                    'days_before_end' => $oldReminderDays,
+                ], [
+                    'days_before_end' => $newReminderDays,
+                ]);
+            }
+
             // Sync recipients
             $recipientInput = $data['recipient_ids'] ?? [];
             if (!is_array($recipientInput)) {
@@ -580,6 +677,18 @@ class ContractController extends Controller
             )));
 
             $contract->notificationRecipients()->sync($recipientIds);
+
+            $newRecipientIds = $recipientIds;
+            sort($newRecipientIds);
+            $oldRecipientIdsSorted = $oldRecipientIds;
+            sort($oldRecipientIdsSorted);
+            if ($oldRecipientIdsSorted !== $newRecipientIds) {
+                AuditLog::log('sync_contract_recipients', $contract, [
+                    'recipient_ids' => $oldRecipientIdsSorted,
+                ], [
+                    'recipient_ids' => $newRecipientIds,
+                ]);
+            }
         });
 
         return redirect()
@@ -607,7 +716,10 @@ class ContractController extends Controller
         // This follows the pattern where child records don't strictly block parent deletion
         // when properly handled by database constraints and relationships
 
+        $oldValues = $contract->toArray();
         $contract->delete();
+        $after = Contract::withTrashed()->find($contract->getKey());
+        AuditLog::log('delete_contract', $contract, $oldValues, $after?->toArray() ?? []);
 
         return redirect()
             ->route('contracts.index')
@@ -633,6 +745,7 @@ class ContractController extends Controller
         }
 
         if ($contract->trashed()) {
+            $oldValues = $contract->toArray();
             // Check if contract type is active and not deleted
             $contractType = $contract->contractType()->withTrashed()->first();
             if (!$contractType || $contractType->trashed() || !$contractType->is_active) {
@@ -651,6 +764,8 @@ class ContractController extends Controller
 
             $contract->restoreWithUser();
 
+            AuditLog::log('restore_contract', $contract, $oldValues, $contract->fresh()?->toArray() ?? []);
+
             // Auto-mark past reminders as sent
             $latestVersion = $contract->latestVersion;
             if ($latestVersion && $latestVersion->end_date) {
@@ -666,10 +781,19 @@ class ContractController extends Controller
                     });
 
                 if ($pastReminders->isNotEmpty()) {
+                    $touchedReminderIds = [];
                     foreach ($pastReminders as $reminder) {
                         $reminder->is_sent = true;
                         $reminder->sent_at = Carbon::now();
                         $reminder->save();
+                        $touchedReminderIds[] = $reminder->getKey();
+                    }
+
+                    if ($touchedReminderIds !== []) {
+                        AuditLog::log('mark_contract_reminders_sent', $contract, [], [
+                            'reminder_ids' => $touchedReminderIds,
+                            'count' => count($touchedReminderIds),
+                        ]);
                     }
 
                     $count = $pastReminders->count();

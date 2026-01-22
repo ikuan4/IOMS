@@ -22,6 +22,21 @@
             $isHierarchyPage = request()->routeIs('roles.hierarchy') || request()->routeIs('roles.hierarchy.*');
         @endphp
 
+        {{-- Audit Logs module (super-admin only) --}}
+        @auth
+            @php
+                $canViewAuditLogs = auth()->user()->isSuperAdmin() && \Illuminate\Support\Facades\Route::has('audit-logs.index');
+                $isAuditLogsModule = request()->routeIs('audit-logs.*') || request()->is('audit-logs*');
+            @endphp
+
+            @if($canViewAuditLogs)
+                <a href="{{ route('audit-logs.index') }}" class="{{ $isAuditLogsModule ? 'active' : '' }}">
+                    <span data-feather="activity"></span>
+                    <span class="label">Audit Logs</span>
+                </a>
+            @endif
+        @endauth
+
         {{-- User Management module (collapsible group) --}}
         @auth
         @php
@@ -117,6 +132,85 @@
                 <a href="{{ route('notification-recipients.index') }}" class="{{ request()->routeIs('notification-recipients.*') ? 'active' : '' }}">
                     <span class="label">Notification Recipients</span>
                 </a>
+                @endif
+            </div>
+        </div>
+        @endif
+        @endauth
+
+        {{-- Ticket Management module (collapsible group) --}}
+        @auth
+        @php
+            $canViewTickets = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('tickets.view');
+            $canViewPendingTickets = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('tickets.pending.view');
+            $canViewTicketTypes = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('ticket-types.view');
+            $canViewTicketModules = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('ticket-modules.view');
+            $ticketsIndexRouteExists = \Illuminate\Support\Facades\Route::has('tickets.index');
+            $ticketTypesIndexRouteExists = \Illuminate\Support\Facades\Route::has('ticket-types.index');
+            $ticketModulesIndexRouteExists = \Illuminate\Support\Facades\Route::has('ticket-modules.index');
+            $showTicketMgmt = $canViewTickets || $canViewPendingTickets || $canViewTicketTypes || $canViewTicketModules;
+            $ticketsIndexUrl = $ticketsIndexRouteExists ? route('tickets.index') : null;
+            $ticketTypesIndexUrl = $ticketTypesIndexRouteExists ? route('ticket-types.index') : null;
+            $ticketModulesIndexUrl = $ticketModulesIndexRouteExists ? route('ticket-modules.index') : null;
+            $isTicketModule = request()->routeIs('tickets.*') || request()->routeIs('ticket-types.*') || request()->routeIs('ticket-modules.*')
+                || request()->is('tickets*') || request()->is('ticket-types*') || request()->is('ticket-modules*');
+        @endphp
+
+        @if($showTicketMgmt)
+        <div class="nav-group {{ $isTicketModule ? 'open' : '' }}" id="nav-ticket-mgmt">
+            <button
+                type="button"
+                class="nav-toggle"
+                id="nav-ticket-mgmt-toggle"
+                aria-expanded="{{ $isTicketModule ? 'true' : 'false' }}"
+                aria-controls="nav-ticket-mgmt-submenu"
+            >
+                <span data-feather="inbox"></span>
+                <span class="label">Ticket Management</span>
+                <span class="nav-toggle-caret" aria-hidden="true" data-feather="chevron-down"></span>
+            </button>
+
+            <div class="nav-submenu" id="nav-ticket-mgmt-submenu">
+                @if($canViewTicketModules)
+                    @if($ticketModulesIndexUrl)
+                    <a href="{{ $ticketModulesIndexUrl }}" class="{{ request()->routeIs('ticket-modules.*') || request()->is('ticket-modules*') ? 'active' : '' }}">
+                        <span class="label">Ticket Modules</span>
+                    </a>
+                    @else
+                    <a href="#" class="disabled" aria-disabled="true" tabindex="-1" onclick="return false;">
+                        <span class="label">Ticket Modules</span>
+                    </a>
+                    @endif
+                @endif
+
+                @if($canViewTicketTypes)
+                    @if($ticketTypesIndexUrl)
+                    <a href="{{ $ticketTypesIndexUrl }}" class="{{ request()->routeIs('ticket-types.*') || request()->is('ticket-types*') ? 'active' : '' }}">
+                        <span class="label">Ticket Types</span>
+                    </a>
+                    @else
+                    <a href="#" class="disabled" aria-disabled="true" tabindex="-1" onclick="return false;">
+                        <span class="label">Ticket Types</span>
+                    </a>
+                    @endif
+                @endif
+
+                @if($canViewTickets)
+                    @if($ticketsIndexUrl)
+                    <a href="{{ $ticketsIndexUrl }}" class="{{ (request()->routeIs('tickets.*') && !request()->routeIs('tickets.pending')) || (request()->is('tickets*') && !request()->is('tickets/pending')) ? 'active' : '' }}">
+                        <span class="label">All Tickets</span>
+                    </a>
+                    @else
+                    <a href="#" class="disabled" aria-disabled="true" tabindex="-1" onclick="return false;">
+                        <span class="label">All Tickets</span>
+                    </a>
+                    @endif
+                @endif
+
+                @if($canViewPendingTickets && \Illuminate\Support\Facades\Route::has('tickets.pending'))
+                    <a href="{{ route('tickets.pending') }}" class="{{ request()->routeIs('tickets.pending') ? 'active' : '' }}">
+                        <span class="label">Pending Tickets</span>
+                    </a>
                 @endif
             </div>
         </div>

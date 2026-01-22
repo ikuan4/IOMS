@@ -3,6 +3,24 @@
 @section('title', 'Manage Contracts')
 
 @section('content')
+    <style>
+        /* Custom select arrow so we can control its position (move ~10px left) */
+        #contracts_branch_id,
+        #contracts_contract_type_id,
+        #per_page {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%236b7280' d='M5.25 7.5 10 12.25 14.75 7.5l1.5 1.5L10 15.25 3.75 9z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 22px center;
+            background-size: 16px 16px;
+            padding-right: 48px !important;
+            background-color: var(--card, #fff);
+            color: var(--text, #111827);
+        }
+    </style>
+
     <div class="header-card">
         <div class="header-left">
             <h2>CONTRACT MANAGEMENT</h2>
@@ -58,7 +76,7 @@
             @if($isSuperAdmin)
                 <div style="flex:1;min-width:180px;">
                     <label style="font-size:13px;font-weight:600;color:#6b7280;margin-bottom:6px;display:block;">BRANCH</label>
-                    <select name="branch_id" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
+                    <select name="branch_id" id="contracts_branch_id" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;background-color:var(--card,#fff);color:var(--text,#111827);">
                         <option value="">All Branches</option>
                         @foreach($branches ?? [] as $branch)
                             <option value="{{ $branch->id }}" {{ request('branch_id') == $branch->id ? 'selected' : '' }}>
@@ -72,7 +90,7 @@
             {{-- Type Filter --}}
             <div style="flex:1;min-width:180px;">
                 <label style="font-size:13px;font-weight:600;color:#6b7280;margin-bottom:6px;display:block;">CONTRACT TYPE</label>
-                <select name="contract_type_id" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
+                <select name="contract_type_id" id="contracts_contract_type_id" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;background-color:var(--card,#fff);color:var(--text,#111827);">
                     <option value="">All Types</option>
                     @foreach($contractTypes ?? [] as $type)
                         <option value="{{ $type->id }}" {{ request('contract_type_id') == $type->id ? 'selected' : '' }}>
@@ -254,7 +272,7 @@
                         <input type="hidden" name="{{ $k }}" value="{{ $v }}" />
                     @endforeach
                     <label for="per_page" style="font-size:13px;color:var(--muted,#6b7280);">Show per Page:</label>
-                    <select name="per_page" id="per_page" onchange="document.getElementById('perPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid var(--muted,#e5e7eb);background:var(--card);color:var(--text,inherit);">
+                    <select name="per_page" id="per_page" onchange="document.getElementById('perPageForm').submit()" style="padding:8px;border-radius:8px;border:1px solid var(--muted,#e5e7eb);background-color:var(--card);color:var(--text,inherit);">
                         @foreach([5,10,15,20,30] as $opt)
                             <option value="{{ $opt }}" {{ $currentPerPage == $opt ? 'selected' : '' }}>{{ $opt }}</option>
                         @endforeach

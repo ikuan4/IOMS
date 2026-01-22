@@ -180,6 +180,10 @@ class RoleController extends Controller
 
         $role = Role::create($validated);
 
+        /** @var \Illuminate\Database\Eloquent\Model $auditable */
+        $auditable = $role;
+        AuditLog::log('create_role', $auditable, [], $role->toArray());
+
         if ($request->input('action') === 'save_only') {
             return redirect()->route('roles.index')
                 ->with('status', 'Role "' . $role->name . '" created successfully.');
@@ -220,6 +224,8 @@ class RoleController extends Controller
     public function update(Request $request, Role $role): RedirectResponse
     {
         $this->authorize('update', $role);
+
+        $oldValues = $role->toArray();
 
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:roles,name,' . $role->id,
@@ -305,6 +311,8 @@ class RoleController extends Controller
             // Silently handle branch assignment failure
         }
 
+        AuditLog::log('update_role', $role, $oldValues, $role->fresh()?->toArray() ?? []);
+
         return redirect()->route('roles.index')
             ->with('status', 'Role "' . $role->name . '" updated successfully.');
     }
@@ -356,6 +364,8 @@ class RoleController extends Controller
 
         $role = Role::withTrashed()->findOrFail($id);
 
+        $oldValues = $role->toArray();
+
         if (!$currentUser->canManageRole($role)) {
             return redirect()->route('roles.index')
                 ->with('error', 'You do not have permission to restore this role.');
@@ -367,6 +377,8 @@ class RoleController extends Controller
         }
 
         $role->restoreWithUser();
+
+        AuditLog::log('restore_role', $role, $oldValues, $role->fresh()?->toArray() ?? []);
 
         return redirect()->route('roles.index')
             ->with('status', 'Role "' . $role->name . '" restored successfully.');
@@ -533,7 +545,15 @@ class RoleController extends Controller
                 $old = $role->priority ?? null;
                 $role->priority = (int)$priority;
                 $role->save();
-                if ($old !== $role->priority) $updatedCount++;
+                if ($old !== $role->priority) {
+                    $updatedCount++;
+                    AuditLog::log(
+                        'update_role_priority',
+                        $role,
+                        ['priority' => $old],
+                        ['priority' => $role->priority]
+                    );
+                }
             }
 
             return back()->with('success', 'Role priorities updated successfully. ' . $updatedCount . ' role(s) updated.');

@@ -71,7 +71,7 @@
                 @php
                     // Reorder modules: existing modules first, then future modules
                     $existingModules = ['dashboard', 'users', 'roles', 'branches', 'permissions'];
-                    $futureModules = ['contract-types', 'contracts', 'notifications'];
+                    $futureModules = ['contract-types', 'contracts', 'notifications', 'ticket-types', 'ticket-modules', 'tickets'];
 
                     $orderedPermissions = collect();
 
@@ -118,11 +118,14 @@
                                             'contract-types' => 'list',
                                             'contracts' => 'file-text',
                                             'notifications' => 'bell',
+                                            'tickets' => 'inbox',
+                                            'ticket-types' => 'tag',
+                                            'ticket-modules' => 'grid',
                                         ];
                                         $icon = $iconMap[$group] ?? 'folder';
 
                                         // Define which modules are not yet implemented
-                                        $futureModules = ['contract-types', 'contracts', 'notifications'];
+                                        $futureModules = ['contract-types', 'contracts', 'notifications', 'ticket-types', 'ticket-modules', 'tickets'];
                                         $isFutureModule = in_array($group, $futureModules);
                                     @endphp
                                     <span data-feather="{{ $icon }}" style="width:18px;height:18px;"></span>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\ContractType;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -157,6 +158,8 @@ class ContractTypeController extends Controller
         $contractType->updated_by = $userIdInt;
         $contractType->save();
 
+        AuditLog::log('create_contract_type', $contractType, [], $contractType->toArray());
+
         return redirect()
             ->route('contract-types.index')
             ->with('status', 'Contract type "' . $contractType->name . '" created successfully.');
@@ -208,6 +211,8 @@ class ContractTypeController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        $oldValues = $contractType->toArray();
+
         $contractType->name = $data['name'];
         $contractType->description = $data['description'] ?? null;
         $contractType->is_active = $request->boolean('is_active');
@@ -230,6 +235,8 @@ class ContractTypeController extends Controller
         }
         $contractType->updated_by = $userIdInt;
         $contractType->save();
+
+        AuditLog::log('update_contract_type', $contractType, $oldValues, $contractType->fresh()?->toArray() ?? []);
 
         return redirect()
             ->route('contract-types.index')
@@ -267,7 +274,10 @@ class ContractTypeController extends Controller
         }
 
         $name = $contractType->name;
+        $oldValues = $contractType->toArray();
         $contractType->delete();
+        $afterValues = ContractType::withTrashed()->find($contractType->getKey())?->toArray() ?? [];
+        AuditLog::log('delete_contract_type', $contractType, $oldValues, $afterValues);
 
         return redirect()
             ->route('contract-types.index')
@@ -361,6 +371,7 @@ class ContractTypeController extends Controller
         }
 
         if ($contractType->trashed()) {
+            $oldValues = $contractType->toArray();
             $contractType->restoreWithUser();
             $contractType->is_active = true;
             $userId = Auth::id();
@@ -376,6 +387,8 @@ class ContractTypeController extends Controller
             }
             $contractType->updated_by = $userIdInt;
             $contractType->save();
+
+            AuditLog::log('restore_contract_type', $contractType, $oldValues, $contractType->fresh()?->toArray() ?? []);
 
             $message = 'Contract type "' . $contractType->name . '" restored successfully.';
             $messageType = 'status';

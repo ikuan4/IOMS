@@ -4,13 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Traits\HasAuditFields;
 
 class StoredFile extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes, HasAuditFields;
 
     protected $fillable = [
         'branch_id',
@@ -20,11 +22,21 @@ class StoredFile extends Model
         'mime_type',
         'size_bytes',
         'sha256',
+        'created_by',
+        'updated_by',
+        'deleted_by',
+        'restored_by',
     ];
 
     protected $casts = [
         'size_bytes' => 'integer',
         'branch_id' => 'integer',
+        'created_by' => 'integer',
+        'updated_by' => 'integer',
+        'deleted_by' => 'integer',
+        'restored_by' => 'integer',
+        'restored_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     /**
@@ -57,7 +69,8 @@ class StoredFile extends Model
         return $this->belongsToMany(
             ContractVersion::class,
             'contract_version_files'
-        )->withPivot('display_order')
+        )->wherePivotNull('deleted_at')
+            ->withPivot('display_order')
             ->withTimestamps();
     }
 

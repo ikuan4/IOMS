@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\NotificationRecipient;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -134,6 +135,8 @@ class NotificationRecipientController extends Controller
             'updated_by' => $userId ? (int) $userId : null,
         ]);
 
+        AuditLog::log('create_notification_recipient', $recipient, [], $recipient->toArray());
+
         return redirect()
             ->route('notification-recipients.index')
             ->with('status', 'Notification recipient "' . $recipient->name . '" created successfully.');
@@ -200,6 +203,8 @@ class NotificationRecipientController extends Controller
             'is_active' => ['nullable', 'boolean'],
         ]);
 
+        $oldValues = $notificationRecipient->toArray();
+
         $notificationRecipient->update([
             'name' => $data['name'],
             'designation' => $data['designation'],
@@ -208,6 +213,8 @@ class NotificationRecipientController extends Controller
             'is_active' => $request->boolean('is_active'),
             'updated_by' => ($id = Auth::id()) ? (int) $id : null,
         ]);
+
+        AuditLog::log('update_notification_recipient', $notificationRecipient, $oldValues, $notificationRecipient->fresh()?->toArray() ?? []);
 
         return redirect()
             ->route('notification-recipients.index')
@@ -230,7 +237,10 @@ class NotificationRecipientController extends Controller
         }
 
         $name = $notificationRecipient->name;
+        $oldValues = $notificationRecipient->toArray();
         $notificationRecipient->delete();
+        $afterValues = NotificationRecipient::withTrashed()->find($notificationRecipient->getKey())?->toArray() ?? [];
+        AuditLog::log('delete_notification_recipient', $notificationRecipient, $oldValues, $afterValues);
 
         return redirect()
             ->route('notification-recipients.index')
@@ -255,6 +265,7 @@ class NotificationRecipientController extends Controller
         }
 
         if ($recipient->trashed()) {
+            $oldValues = $recipient->toArray();
             $recipient->restoreWithUser();
             $recipient->is_active = true;
             $userId = Auth::id();
@@ -270,6 +281,8 @@ class NotificationRecipientController extends Controller
             }
             $recipient->updated_by = $userIdInt;
             $recipient->save();
+
+            AuditLog::log('restore_notification_recipient', $recipient, $oldValues, $recipient->fresh()?->toArray() ?? []);
 
             $message = 'Notification recipient "' . $recipient->name . '" restored successfully.';
             $messageType = 'status';
