@@ -2,12 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use App\Models\Branch;
-use App\Models\Role;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DatabaseSeeder extends Seeder
 {
@@ -18,30 +17,75 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Ensure a clean state for roles and users so Developer and FrancisJr are primary
-        DB::table('role_has_permissions')->delete();
-        DB::table('model_has_roles')->delete();
-        DB::table('users')->delete();
-        DB::table('roles')->delete();
+        $tableNames = config('permission.table_names', []);
+        $spatieTables = [
+            'roles' => Arr::get($tableNames, 'roles', 'roles'),
+            'permissions' => Arr::get($tableNames, 'permissions', 'permissions'),
+            'model_has_roles' => Arr::get($tableNames, 'model_has_roles', 'model_has_roles'),
+            'model_has_permissions' => Arr::get($tableNames, 'model_has_permissions', 'model_has_permissions'),
+            'role_has_permissions' => Arr::get($tableNames, 'role_has_permissions', 'role_has_permissions'),
+        ];
 
-        // Optionally recreate a main branch (not required for Developer)
-        $branch = Branch::firstOrCreate(['name' => 'Main Branch'], ['created_by' => null, 'updated_by' => null]);
+        $deleteAllRowsIfExists = function (string $table) {
+            if (!Schema::hasTable($table)) {
+                $this->command?->warn("Skipping cleanup: table [$table] does not exist.");
+                return;
+            }
 
-        // Seed permissions and Developer role first
-        $this->call(\Database\Seeders\RolePermissionSeeder::class);
-        // Ensure Developer has all permissions and highest priority
-        $this->call(\Database\Seeders\GrantDeveloperAllPermissionsSeeder::class);
+            DB::table($table)->delete();
+        };
 
-        // Create FrancisJr user and remove any other users within the Developer seeder
-        $this->call(\Database\Seeders\DeveloperUserSeeder::class);
+        // Ensure a clean state for roles and users so Developer and FrancisJr are primary.
+        // Guarded so this seeder never crashes on fresh/provisioning databases.
+        $deleteAllRowsIfExists($spatieTables['role_has_permissions']);
+        $deleteAllRowsIfExists($spatieTables['model_has_roles']);
+        $deleteAllRowsIfExists($spatieTables['model_has_permissions']);
+        $deleteAllRowsIfExists('user_role');
+        $deleteAllRowsIfExists('users');
+        $deleteAllRowsIfExists($spatieTables['roles']);
+        $deleteAllRowsIfExists($spatieTables['permissions']);
 
-        // Create branches, dummy roles and dummy users
-        $this->call(\Database\Seeders\BranchSeeder::class);
-        $this->call(\Database\Seeders\DummyRolesSeeder::class);
-        $this->call(\Database\Seeders\DummyUsersSeeder::class);
+        // Create branches first (other seeders depend on it)
+        if (Schema::hasTable('branches')) {
+            $this->call(\Database\Seeders\BranchSeeder::class);
+        } else {
+            $this->command?->warn('Skipping BranchSeeder: table [branches] does not exist.');
+        }
 
-        // Create contracts, contract types, and notification recipients
-        $this->call(\Database\Seeders\ContractsSeeder::class);
+        // Spatie permissions + roles
+        $hasSpatieCore = Schema::hasTable($spatieTables['roles'])
+            && Schema::hasTable($spatieTables['permissions'])
+            && Schema::hasTable($spatieTables['role_has_permissions']);
+
+        if ($hasSpatieCore) {
+            $this->call(\Database\Seeders\RolePermissionSeeder::class);
+            $this->call(\Database\Seeders\GrantDeveloperAllPermissionsSeeder::class);
+        } else {
+            $this->command?->warn('Skipping permission/role seeders: Spatie permission tables are missing.');
+        }
+
+        // Create FrancisJr user
+        if (Schema::hasTable('users')) {
+            $this->call(\Database\Seeders\DeveloperUserSeeder::class);
+        } else {
+            $this->command?->warn('Skipping DeveloperUserSeeder: table [users] does not exist.');
+        }
+
+        // Dummy roles/users depend on roles/users tables
+        if (Schema::hasTable($spatieTables['roles']) && Schema::hasTable('users')) {
+            $this->call(\Database\Seeders\DummyRolesSeeder::class);
+            $this->call(\Database\Seeders\DummyUsersSeeder::class);
+        } else {
+            $this->command?->warn('Skipping DummyRolesSeeder/DummyUsersSeeder: required tables are missing.');
+        }
+
+        // Contracts, contract types, and notification recipients
+        // Keep this guarded so production deployments don\'t fail if a feature migration is missing.
+        if (Schema::hasTable('contracts')) {
+            $this->call(\Database\Seeders\ContractsSeeder::class);
+        } else {
+            $this->command?->warn('Skipping ContractsSeeder: table [contracts] does not exist.');
+        }
 
         // Canonical permissions seeder (run manually when ready):
         // $this->call(\Database\Seeders\CanonicalPermissionsSeeder::class);
