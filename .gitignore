@@ -2,6 +2,7 @@
 .DS_Store
 .env
 .env for mysql
+.env.bak
 .env.backup
 .env.production
 .phpactor.json
