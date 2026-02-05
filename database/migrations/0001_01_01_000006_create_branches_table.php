@@ -16,8 +16,8 @@ return new class extends Migration
             $table->string('name');
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->unsignedBigInteger('deleted_by')->nullable()->index();
-            $table->unsignedBigInteger('restored_by')->nullable()->index();
+            $table->foreignId('deleted_by')->nullable()->index();
+            $table->foreignId('restored_by')->nullable()->index();
             $table->timestamps();
             $table->softDeletes();
             $table->timestamp('restored_at')->nullable();

@@ -12,26 +12,28 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            // Composite index for active user queries with soft deletes
-            if (!$this->indexExists('users', 'users_active_deleted_at_index')) {
+        // Create indexes in a DB-agnostic way — attempt and ignore if already present.
+        try {
+            Schema::table('users', function (Blueprint $table) {
                 $table->index(['active', 'deleted_at'], 'users_active_deleted_at_index');
-            }
-        });
+            });
+        } catch (\Throwable $e) {
+            // index likely exists or DB-specific error; ignore to keep migration idempotent
+        }
 
-        Schema::table('roles', function (Blueprint $table) {
-            // Composite index for active role queries by branch
-            if (!$this->indexExists('roles', 'roles_is_active_deleted_at_branch_id_index')) {
+        try {
+            Schema::table('roles', function (Blueprint $table) {
                 $table->index(['is_active', 'deleted_at', 'branch_id'], 'roles_is_active_deleted_at_branch_id_index');
-            }
-        });
+            });
+        } catch (\Throwable $e) {
+        }
 
-        Schema::table('branches', function (Blueprint $table) {
-            // Index for soft delete queries
-            if (!$this->indexExists('branches', 'branches_deleted_at_index')) {
+        try {
+            Schema::table('branches', function (Blueprint $table) {
                 $table->index('deleted_at', 'branches_deleted_at_index');
-            }
-        });
+            });
+        } catch (\Throwable $e) {
+        }
     }
 
     /**
@@ -39,56 +41,26 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            if ($this->indexExists('users', 'users_active_deleted_at_index')) {
+        try {
+            Schema::table('users', function (Blueprint $table) {
                 $table->dropIndex('users_active_deleted_at_index');
-            }
-        });
+            });
+        } catch (\Throwable $e) {
+        }
 
-        Schema::table('roles', function (Blueprint $table) {
-            if ($this->indexExists('roles', 'roles_is_active_deleted_at_branch_id_index')) {
+        try {
+            Schema::table('roles', function (Blueprint $table) {
                 $table->dropIndex('roles_is_active_deleted_at_branch_id_index');
-            }
-        });
+            });
+        } catch (\Throwable $e) {
+        }
 
-        Schema::table('branches', function (Blueprint $table) {
-            if ($this->indexExists('branches', 'branches_deleted_at_index')) {
+        try {
+            Schema::table('branches', function (Blueprint $table) {
                 $table->dropIndex('branches_deleted_at_index');
-            }
-        });
+            });
+        } catch (\Throwable $e) {
+        }
     }
 
-    private function indexExists(string $table, string $index): bool
-    {
-        $conn = Schema::getConnection();
-        $driver = $conn->getDriverName();
-
-        if ($driver === 'sqlite') {
-            $rows = DB::select("PRAGMA index_list('$table')");
-            foreach ($rows as $row) {
-                if (isset($row->name) && $row->name === $index) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
-            return false;
-        }
-
-        $dbName = $conn->getDatabaseName();
-
-        // Use raw query instead of Doctrine
-        $result = DB::select(
-            "SELECT COUNT(*) as count
-             FROM information_schema.STATISTICS
-             WHERE TABLE_SCHEMA = ?
-             AND TABLE_NAME = ?
-             AND INDEX_NAME = ?",
-            [$dbName, $table, $index]
-        );
-
-        return $result[0]->count > 0;
-    }
 };

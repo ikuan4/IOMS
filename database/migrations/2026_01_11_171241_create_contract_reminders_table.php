@@ -20,7 +20,7 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             // X days before end_date
-            $table->unsignedInteger('days_before_end');
+            $table->integer('days_before_end');
 
             // One-shot tracking
             $table->boolean('is_sent')->default(false);

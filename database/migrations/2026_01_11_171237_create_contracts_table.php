@@ -33,7 +33,7 @@ return new class extends Migration
             $table->string('contract_with');
 
             // Grace period for "Expiring Soon" status
-            $table->unsignedInteger('grace_period_days')->default(30);
+            $table->integer('grace_period_days')->default(30);
 
             // Active/Inactive flag
             $table->boolean('is_active')->default(true);

@@ -25,7 +25,7 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             // Display order for attachments (Attachment 1, 2, 3...)
-            $table->unsignedInteger('display_order')->default(1);
+            $table->integer('display_order')->default(1);
 
             $table->timestamps();
 

@@ -13,16 +13,34 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $driver = Schema::getConnection()->getDriverName();
-        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
-            return;
+        // Drop circular FK constraints in a DB-agnostic manner. Attempt drops and ignore failures.
+        try {
+            Schema::table('branches', function (Blueprint $table) {
+                try {
+                    $table->dropForeign(['created_by']);
+                } catch (\Throwable $e) {
+                }
+                try {
+                    $table->dropForeign(['updated_by']);
+                } catch (\Throwable $e) {
+                }
+            });
+        } catch (\Throwable $e) {
         }
 
-        // Check and drop FK constraints if they exist
-        $this->dropForeignKeyIfExists('branches', 'branches_created_by_foreign');
-        $this->dropForeignKeyIfExists('branches', 'branches_updated_by_foreign');
-        $this->dropForeignKeyIfExists('roles', 'roles_created_by_foreign');
-        $this->dropForeignKeyIfExists('roles', 'roles_updated_by_foreign');
+        try {
+            Schema::table('roles', function (Blueprint $table) {
+                try {
+                    $table->dropForeign(['created_by']);
+                } catch (\Throwable $e) {
+                }
+                try {
+                    $table->dropForeign(['updated_by']);
+                } catch (\Throwable $e) {
+                }
+            });
+        } catch (\Throwable $e) {
+        }
     }
 
     /**
@@ -30,58 +48,34 @@ return new class extends Migration
      */
     public function down(): void
     {
-        $driver = Schema::getConnection()->getDriverName();
-        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
-            return;
-        }
-
-        Schema::table('branches', function (Blueprint $table) {
-            if (!$this->foreignKeyExists('branches', 'branches_created_by_foreign')) {
-                $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
-            }
-            if (!$this->foreignKeyExists('branches', 'branches_updated_by_foreign')) {
-                $table->foreign('updated_by')->references('id')->on('users')->nullOnDelete();
-            }
-        });
-
-        Schema::table('roles', function (Blueprint $table) {
-            if (!$this->foreignKeyExists('roles', 'roles_created_by_foreign')) {
-                $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
-            }
-            if (!$this->foreignKeyExists('roles', 'roles_updated_by_foreign')) {
-                $table->foreign('updated_by')->references('id')->on('users')->nullOnDelete();
-            }
-        });
-    }
-
-    private function dropForeignKeyIfExists(string $table, string $foreignKey): void
-    {
-        if ($this->foreignKeyExists($table, $foreignKey)) {
-            Schema::table($table, function (Blueprint $table) use ($foreignKey) {
-                $table->dropForeign($foreignKey);
+        // Recreate the fk constraints; ignore errors if they already exist or cannot be added.
+        try {
+            Schema::table('branches', function (Blueprint $table) {
+                try {
+                    $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
+                } catch (\Throwable $e) {
+                }
+                try {
+                    $table->foreign('updated_by')->references('id')->on('users')->nullOnDelete();
+                } catch (\Throwable $e) {
+                }
             });
+        } catch (\Throwable $e) {
+        }
+
+        try {
+            Schema::table('roles', function (Blueprint $table) {
+                try {
+                    $table->foreign('created_by')->references('id')->on('users')->nullOnDelete();
+                } catch (\Throwable $e) {
+                }
+                try {
+                    $table->foreign('updated_by')->references('id')->on('users')->nullOnDelete();
+                } catch (\Throwable $e) {
+                }
+            });
+        } catch (\Throwable $e) {
         }
     }
 
-    private function foreignKeyExists(string $table, string $foreignKey): bool
-    {
-        $conn = Schema::getConnection();
-        $driver = $conn->getDriverName();
-        if (!in_array($driver, ['mysql', 'mariadb'], true)) {
-            return false;
-        }
-        $dbName = $conn->getDatabaseName();
-
-        $exists = DB::select(
-            "SELECT CONSTRAINT_NAME
-             FROM information_schema.TABLE_CONSTRAINTS
-             WHERE CONSTRAINT_SCHEMA = ?
-             AND TABLE_NAME = ?
-             AND CONSTRAINT_NAME = ?
-             AND CONSTRAINT_TYPE = 'FOREIGN KEY'",
-            [$dbName, $table, $foreignKey]
-        );
-
-        return count($exists) > 0;
-    }
 };

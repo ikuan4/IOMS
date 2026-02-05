@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('contract_notification_recipient', function (Blueprint $table) {
             $table->id();
 
-            $table->unsignedBigInteger('contract_id');
-            $table->unsignedBigInteger('notification_recipient_id');
+            $table->foreignId('contract_id');
+            $table->foreignId('notification_recipient_id');
 
             $table->timestamps();
 

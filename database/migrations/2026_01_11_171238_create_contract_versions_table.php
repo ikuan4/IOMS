@@ -20,7 +20,7 @@ return new class extends Migration
                 ->restrictOnDelete();
 
             // Version number: 1, 2, 3, ...
-            $table->unsignedInteger('version_number');
+            $table->integer('version_number');
 
             // Optional description for this version
             $table->text('description')->nullable();

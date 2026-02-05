@@ -21,7 +21,7 @@ return new class extends Migration
             $table->timestamp('mobile_verified_at')->nullable();
             $table->string('password');
             $table->boolean('active')->default(true);
-            $table->unsignedInteger('email_bounce_count')->default(0);
+            $table->integer('email_bounce_count')->default(0);
             $table->timestamp('email_bounced_at')->nullable();
             $table->rememberToken();
             $table->timestamps();

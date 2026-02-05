@@ -31,7 +31,7 @@ return new class extends Migration
 
             // MIME type and size
             $table->string('mime_type')->nullable();
-            $table->unsignedBigInteger('size_bytes')->nullable();
+            $table->bigInteger('size_bytes')->nullable();
 
             // SHA-256 for deduplication within branch
             $table->string('sha256', 64);
