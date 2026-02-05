@@ -1,6 +1,6 @@
 FROM php:8.2-cli
 
-# Install system + PHP dependencies (GD + mbstring + Postgres)
+# Install system + PHP dependencies (Postgres, GD, mbstring)
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -24,14 +24,17 @@ RUN apt-get update && apt-get install -y \
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /var/www
 
+# Copy application files
 COPY . .
 
 # Install PHP dependencies (no scripts during build)
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
+# Expose Render port
 EXPOSE 10000
 
-CMD php artisan migrate --force && \
-    php artisan serve --host=0.0.0.0 --port=10000
+# Start Laravel (NO migrations here)
+CMD php artisan serve --host=0.0.0.0 --port=10000

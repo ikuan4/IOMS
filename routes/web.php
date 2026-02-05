@@ -11,6 +11,8 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketAttachmentController;
 use App\Http\Controllers\AuditLogController;
 
+Route::get('/health', fn () => response('OK', 200));
+
 // Landing → login page
 Route::get('/', function () {
     return view('auth.login');
