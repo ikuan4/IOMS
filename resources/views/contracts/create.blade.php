@@ -183,23 +183,67 @@
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    flatpickr("#start_date", {
-        dateFormat: "Y-m-d H:i",
-        enableTime: true,
-        time_24hr: true,
-        altInput: true,
-        altFormat: "d M Y, h:i K"
-    });
+function initializeContractDatePickers() {
+    const startDateInput = document.querySelector('#start_date');
+    const endDateInput = document.querySelector('#end_date');
 
-    flatpickr("#end_date", {
-        dateFormat: "Y-m-d H:i",
-        enableTime: true,
-        time_24hr: true,
-        altInput: true,
-        altFormat: "d M Y, h:i K"
-    });
-});
+    if (startDateInput) {
+        if (startDateInput._flatpickr) {
+            startDateInput._flatpickr.destroy();
+        }
+        flatpickr("#start_date", {
+            dateFormat: "Y-m-d H:i",
+            enableTime: true,
+            time_24hr: true,
+            altInput: true,
+            altFormat: "d M Y, h:i K",
+            onReady: function(selectedDates, dateStr, instance) {
+                if (instance.altInput) {
+                    instance.altInput.style.width = '100%';
+                    instance.altInput.style.padding = '14px 16px';
+                    instance.altInput.style.borderRadius = '10px';
+                    instance.altInput.style.border = '1px solid #d0d7e0';
+                    instance.altInput.style.fontSize = '15px';
+                    instance.altInput.style.cursor = 'pointer';
+                    instance.altInput.style.backgroundColor = 'white';
+                }
+            }
+        });
+    }
+
+    if (endDateInput) {
+        if (endDateInput._flatpickr) {
+            endDateInput._flatpickr.destroy();
+        }
+        flatpickr("#end_date", {
+            dateFormat: "Y-m-d H:i",
+            enableTime: true,
+            time_24hr: true,
+            altInput: true,
+            altFormat: "d M Y, h:i K",
+            onReady: function(selectedDates, dateStr, instance) {
+                if (instance.altInput) {
+                    instance.altInput.style.width = '100%';
+                    instance.altInput.style.padding = '14px 16px';
+                    instance.altInput.style.borderRadius = '10px';
+                    instance.altInput.style.border = '1px solid #d0d7e0';
+                    instance.altInput.style.fontSize = '15px';
+                    instance.altInput.style.cursor = 'pointer';
+                    instance.altInput.style.backgroundColor = 'white';
+                }
+            }
+        });
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeContractDatePickers);
+} else {
+    initializeContractDatePickers();
+}
+
+// Re-initialize on SPA navigation
+window.addEventListener('spa:navigated', initializeContractDatePickers);
 
 function updateFileLabel(input) {
     const fileCount = input.files.length;

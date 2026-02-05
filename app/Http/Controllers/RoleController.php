@@ -26,50 +26,117 @@ class RoleController extends Controller
     {
         $this->authorize('viewAny', Role::class);
 
-        /** @var User|null $currentUser */
         $currentUser = Auth::user();
         assert($currentUser instanceof User);
 
-        // Build base query (without status/search) for counts and scoping
-        $baseQuery = Role::with([
-            'deletedBy' => function($q) { $q->withTrashed(); },
-            'branch' => function($q) { $q->withTrashed(); }
-        ]);
-        if ($currentUser->isSuperAdmin()) {
-            $baseQuery->withTrashed();
-        } else {
-            // Non-developer users: restrict to own branch only
-            $baseQuery->where('branch_id', $currentUser->branch_id);
+        // Build and apply queries
+        $baseQuery = $this->buildBaseQuery($currentUser);
+        $statusCounts = $this->computeStatusCounts($baseQuery);
+        $query = $this->applyFilters(clone $baseQuery, $request);
 
-            $manageableRoleIds = $currentUser->getManageableRoles()->pluck('id')->push($currentUser->role_id);
-
-            $userDeletedRoleIds = AuditLog::where('user_id', $currentUser->id)
-                ->where('action', 'delete_role')
-                ->where('auditable_type', Role::class)
-                ->where('auditable_id', 'IN', function($query) use ($currentUser) {
-                    $query->select('id')->from('roles')->where('branch_id', $currentUser->branch_id);
-                })
-                ->pluck('auditable_id');
-
-            $baseQuery->where(function ($q) use ($manageableRoleIds, $userDeletedRoleIds) {
-                $q->whereIn('id', $manageableRoleIds)
-                    ->orWhere(function ($subQ) use ($userDeletedRoleIds) {
-                        $subQ->whereIn('id', $userDeletedRoleIds)->onlyTrashed();
-                    });
-            });
+        // Handle AJAX requests
+        $roleId = $request->query('role_id');
+        if ($roleId && $request->ajax()) {
+            return $this->handleAjaxRoleUsers($roleId);
         }
 
-        // compute counts for status cards using the scoped baseQuery
-        $statusCounts = [
+        // Paginate results
+        $perPage = $this->getValidPerPage($request);
+        $roles = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
+
+        // Store session URL
+        try {
+            session(['roles_list_back_url' => $request->fullUrl()]);
+        } catch (\Throwable) {
+            // Ignore session issues
+        }
+
+        // Handle table AJAX requests
+        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
+        if ($request->ajax() && !$isSpaNavigation) {
+            return view('roles._roles_table', compact('roles'));
+        }
+
+        return view('roles.index', compact('roles', 'statusCounts'));
+    }
+
+    /**
+     * Build the base scoped query for roles, applying authorization constraints.
+     *
+     * @param User $user
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\Role>
+     */
+    private function buildBaseQuery(User $user): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = Role::with([
+            'deletedBy' => fn($q) => $q->withTrashed(),
+            'branch' => fn($q) => $q->withTrashed()
+        ]);
+
+        if ($user->isSuperAdmin()) {
+            $query->withTrashed();
+            return $query;
+        }
+
+        // Non-admin: restrict to own branch
+        $query->where('branch_id', $user->branch_id);
+
+        $manageableRoleIds = $user->getManageableRoles()->pluck('id')->push($user->role_id);
+        $userDeletedRoleIds = $this->getUserDeletedRoleIds($user);
+
+        $query->where(function ($q) use ($manageableRoleIds, $userDeletedRoleIds) {
+            $q->whereIn('id', $manageableRoleIds)
+                ->orWhere(function ($subQ) use ($userDeletedRoleIds) {
+                        // Use explicit deleted_at check instead of onlyTrashed() for static analysis
+                        $subQ->whereIn('id', $userDeletedRoleIds)->whereNotNull('deleted_at');
+                });
+        });
+
+        return $query;
+    }
+
+    /**
+     * Get deleted role IDs that the user deleted.
+     *
+     * @param User $user
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    private function getUserDeletedRoleIds(User $user): Collection
+    {
+        return AuditLog::where('user_id', $user->id)
+            ->where('action', 'delete_role')
+            ->where('auditable_type', Role::class)
+            ->where('auditable_id', 'IN', function ($q) use ($user) {
+                $q->select('id')->from('roles')->where('branch_id', $user->branch_id);
+            })
+            ->pluck('auditable_id');
+    }
+
+    /**
+     * Compute status counts from the base query.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder<\App\Models\Role> $baseQuery
+     * @return array<string,int>
+     */
+    private function computeStatusCounts(\Illuminate\Database\Eloquent\Builder $baseQuery): array
+    {
+        return [
             'all' => (clone $baseQuery)->count(),
             'active' => (clone $baseQuery)->whereNull('deleted_at')->where('is_active', true)->count(),
             'inactive' => (clone $baseQuery)->whereNull('deleted_at')->where('is_active', false)->count(),
             'deleted' => (clone $baseQuery)->onlyTrashed()->count(),
         ];
+    }
 
-        // Now apply filters (status/search) to a fresh query cloned from base
-        $query = (clone $baseQuery);
-
+    /**
+     * Apply status and search filters to a query.
+     *
+     * @param \Illuminate\Database\Eloquent\Builder<\App\Models\Role> $query
+     * @param Request $request
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\Role>
+     */
+    private function applyFilters(\Illuminate\Database\Eloquent\Builder $query, Request $request): \Illuminate\Database\Eloquent\Builder
+    {
         $status = $request->query('status');
         if ($status !== null) {
             if ($status === 'active') {
@@ -90,60 +157,50 @@ class RoleController extends Controller
             });
         }
 
-        // Respect per-page selection from query, with a safe whitelist and default 10
-        $allowed = [5,10,15,20,30];
+        return $query;
+    }
+
+    /**
+     * Get validated per-page value from request.
+     */
+    private function getValidPerPage(Request $request): int
+    {
+        $allowed = [5, 10, 15, 20, 30];
         $perPage = (int) ($request->query('per_page') ?? 10);
-        if (!in_array($perPage, $allowed, true)) {
-            $perPage = 10;
+        return in_array($perPage, $allowed, true) ? $perPage : 10;
+    }
+
+    /**
+     * Handle AJAX request for users assigned to a role.
+     */
+    private function handleAjaxRoleUsers(mixed $roleId): JsonResponse
+    {
+        $role = Role::find($roleId);
+        if (!($role instanceof Role)) {
+            return response()->json([]);
         }
 
-        $roles = $query->orderBy('id', 'asc')->paginate($perPage)->withQueryString();
+        $this->authorize('view', $role);
 
-        // remember the current roles list URL so the role details page can return here
-        try {
-            session(['roles_list_back_url' => $request->fullUrl()]);
-        } catch (\Throwable $__e) {
-            // ignore session issues
-        }
+        $users = User::where('role_id', $role->id)
+            ->with(['role' => fn($q) => $q->withTrashed()])
+            ->get();
 
-        // Get users by role if requested (AJAX) — return normalized JSON shape
-        $roleId = $request->query('role_id');
-        if ($roleId && $request->ajax()) {
-            /** @var Role|null $role */
-            $role = Role::find($roleId);
-            $mapped = [];
-            if ($role instanceof Role) {
-                $this->authorize('view', $role);
+        $mapped = $users->map(function ($u) {
+            return [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'active' => (bool) ($u->active ?? false),
+                'role' => $u->role ? [
+                    'id' => $u->role->id,
+                    'name' => $u->role->name,
+                    'slug' => $u->role->slug
+                ] : null,
+            ];
+        })->values();
 
-                // Users assigned via direct foreign key on users.role_id
-                $users = User::where('role_id', $role->id)
-                    ->with(['role' => function($q) { $q->withTrashed(); }])
-                    ->get();
-
-                $mapped = $users->map(function ($u) {
-                    $roleObj = $u->role ? ['id' => $u->role->id, 'name' => $u->role->name, 'slug' => $u->role->slug] : null;
-                    return [
-                        'id' => $u->id,
-                        'name' => $u->name,
-                        'email' => $u->email,
-                        'active' => (bool) ($u->active ?? false),
-                        'role' => $roleObj,
-                    ];
-                })->values();
-            }
-            return response()->json($mapped);
-        }
-
-        // Handle regular table AJAX requests (search/pagination inside roles page)
-        // SPA navigation also uses XHR fetch, but it needs the full HTML document.
-        $isSpaNavigation = strtolower((string) $request->header('X-SPA-Navigation')) === 'true';
-        if ($request->ajax() && !$roleId && !$isSpaNavigation) {
-            /** @var view-string $view */
-            $view = 'roles._roles_table';
-            return view($view, compact('roles'));
-        }
-
-        return view('roles.index', compact('roles', 'statusCounts'));
+        return response()->json($mapped);
     }
 
     public function store(Request $request): RedirectResponse
@@ -270,6 +327,7 @@ class RoleController extends Controller
 
             $deactivateFlag = $request->boolean('deactivate_mapped_users');
             // Count active mapped users (only direct role_id assignment)
+            /** @var \Illuminate\Support\Collection<int, User> $users */
             $users = User::where('role_id', $role->id)
                 ->where('active', true)
                 ->whereNull('deleted_at')
@@ -411,8 +469,7 @@ class RoleController extends Controller
         $activeUsersQuery = User::where('role_id', $role->id)
             ->where('active', true);
 
-        $activeUserCount = (clone $activeUsersQuery)->count();
-        $activeUsersSample = (clone $activeUsersQuery)
+        $activeUserCount = (clone $activeUsersQuery)->count();        /** @var \Illuminate\Support\Collection<int, User> $activeUsersSample */        $activeUsersSample = (clone $activeUsersQuery)
             ->orderBy('id')
             ->limit(5)
             ->get(['id', 'name']);
@@ -473,6 +530,7 @@ class RoleController extends Controller
         if ($isDeveloper) {
             // Developer: only pre-select if explicitly passed via query, otherwise null
             $selectedBranchId = $request->query('branch_id') ? (int)$request->query('branch_id') : null;
+            /** @var \Illuminate\Support\Collection<int, Role> $rolesForView */
             $rolesForView = $selectedBranchId
                 ? Role::where('branch_id', $selectedBranchId)->orderBy('priority', 'asc')->get()
                 : collect([]);
@@ -486,6 +544,7 @@ class RoleController extends Controller
 
             // User can only see roles with priority > their own (lower privilege/higher number)
             // This excludes their own role and any roles with higher privilege
+            /** @var \Illuminate\Support\Collection<int, Role> $rolesForView */
             $rolesForView = Role::where('branch_id', $currentUser->branch_id)
                 ->where('priority', '>', $userPriority)
                 ->orderBy('priority', 'asc')

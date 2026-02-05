@@ -181,12 +181,6 @@
                     {{ $contract->latestVersion->description }}
                 </p>
             @endif
-
-            <div style="text-align: center; margin-top: 30px;">
-                <a href="{{ config('app.url') }}/contracts/{{ $contract->id }}" class="button">
-                    View Contract Details
-                </a>
-            </div>
         </div>
 
         <div class="footer">

@@ -175,6 +175,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Backwards-compatible alias for legacy checks.
+     * Some views/controllers call `isDeveloper()`; delegate to `isSuperAdmin()`.
+     */
+    public function isDeveloper(): bool
+    {
+        return $this->isSuperAdmin();
+    }
+
+    /**
      * Check if user has a specific permission (custom system).
      * Protected Super Admin user bypasses all permission checks.
      *

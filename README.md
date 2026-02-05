@@ -57,3 +57,8 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Telegram token
+
+token: 8482791803:AAHgZ1N9l96D1NgkppMYOl_UOnkO4GhZSF0
+chat id: 965756157

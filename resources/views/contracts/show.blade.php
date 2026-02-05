@@ -449,7 +449,33 @@
                 onmouseover="this.style.background='#d97706'"
                 onmouseout="this.style.background='#f59e0b'">
                 <i data-feather="send" style="width:18px;height:18px;"></i>
-                Send Test Notification
+                Send Test Email Notification
+            </button>
+        </form>
+        @endif
+
+        @if(Auth::user()->isSuperAdmin() || Auth::user()->isDeveloper())
+        <form method="POST" action="{{ route('contracts.send-test-notification', $contract) }}" style="display:inline-flex;align-items:center;gap:8px;">
+            @csrf
+            <input type="hidden" name="channel" value="telegram">
+            <button type="submit"
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:8px;
+                    padding:12px 20px;
+                    border-radius:10px;
+                    background:#10b981;
+                    color:white;
+                    border:none;
+                    font-weight:600;
+                    cursor:pointer;
+                    transition:all 0.2s;
+                "
+                onmouseover="this.style.background='#059669'"
+                onmouseout="this.style.background='#10b981'">
+                <i data-feather="message-circle" style="width:18px;height:18px;"></i>
+                Send Test Telegram Notification
             </button>
         </form>
         @endif

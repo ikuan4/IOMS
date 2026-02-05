@@ -553,10 +553,12 @@ class ContractController extends Controller
             if (!empty($data['remove_files'])) {
                 $filesToRemove = array_filter($data['remove_files'], fn($v) => !empty($v));
                 if (!empty($filesToRemove)) {
+                    /** @var \Illuminate\Database\Eloquent\Collection<int, \App\Models\ContractVersionFile> $pivots */
                     $pivots = ContractVersionFile::whereIn('id', $filesToRemove)
                         ->where('contract_version_id', $version->id)
                         ->get();
 
+                    /** @var \App\Models\ContractVersionFile $pivot */
                     foreach ($pivots as $pivot) {
                         try {
                             $pivot->delete();
@@ -627,7 +629,10 @@ class ContractController extends Controller
             }
 
             // Refresh reminders
+            /** @var \Illuminate\Database\Eloquent\Collection<int, \App\Models\ContractReminder> $existingReminders */
             $existingReminders = $contract->reminders()->get();
+
+            /** @var \App\Models\ContractReminder $rem */
             foreach ($existingReminders as $rem) {
                 try {
                     $rem->delete();
@@ -747,6 +752,7 @@ class ContractController extends Controller
         if ($contract->trashed()) {
             $oldValues = $contract->toArray();
             // Check if contract type is active and not deleted
+            /** @var ContractType|null $contractType */
             $contractType = $contract->contractType()->withTrashed()->first();
             if (!$contractType || $contractType->trashed() || !$contractType->is_active) {
                 return redirect()
@@ -755,6 +761,7 @@ class ContractController extends Controller
             }
 
             // Check if branch is active and not deleted
+            /** @var Branch|null $branch */
             $branch = $contract->branch()->withTrashed()->first();
             if (!$branch || $branch->trashed()) {
                 return redirect()
@@ -772,10 +779,11 @@ class ContractController extends Controller
                 $endDate = $latestVersion->end_date;
                 $today = Carbon::now()->startOfDay();
 
+                /** @var \Illuminate\Support\Collection<int, ContractReminder> $pastReminders */
                 $pastReminders = $contract->reminders()
                     ->where('is_sent', false)
                     ->get()
-                    ->filter(function ($reminder) use ($endDate, $today) {
+                    ->filter(function (ContractReminder $reminder) use ($endDate, $today) {
                         $triggerDate = $endDate->copy()->subDays($reminder->days_before_end)->startOfDay();
                         return $triggerDate->lt($today);
                     });
@@ -783,6 +791,7 @@ class ContractController extends Controller
                 if ($pastReminders->isNotEmpty()) {
                     $touchedReminderIds = [];
                     foreach ($pastReminders as $reminder) {
+                        /** @var ContractReminder $reminder */
                         $reminder->is_sent = true;
                         $reminder->sent_at = Carbon::now();
                         $reminder->save();
@@ -1158,6 +1167,33 @@ class ContractController extends Controller
         // Branch access check
         if (!$user->isSuperAdmin() && $contract->branch_id !== $user->branch_id) {
             abort(403, 'Unauthorized action.');
+        }
+
+        // If requested via channel=telegram, send only a telegram test message (do not email recipients)
+        if (request()->input('channel') === 'telegram') {
+            try {
+                $telegram = app()->make(\App\Services\TelegramService::class);
+
+                $v = $contract->latestVersion;
+                $end = $v && $v->end_date ? $v->end_date->timezone('Asia/Kolkata')->format('d M Y') : 'N/A';
+                $type = $contract->contractType ? ($contract->contractType->name ?? 'N/A') : 'N/A';
+                $recipientsCount = $contract->notificationRecipients()->where('is_active', true)->count();
+                $link = route('contracts.show', $contract);
+
+                $text = "Contract: {$contract->contract_number}\n";
+                $text .= "With: {$contract->contract_with}\n";
+                $text .= "Type: {$type}\n";
+                $text .= "End: {$end}\n";
+                $text .= "Status: {$contract->status}\n";
+                $text .= "Recipients: {$recipientsCount}\n";
+                $text .= "View: {$link}";
+
+                $telegram->sendMessage($text);
+
+                return back()->with('status', 'Test Telegram notification sent successfully.');
+            } catch (\Throwable $e) {
+                return back()->with('error', 'Failed to send Telegram test notification: ' . $e->getMessage());
+            }
         }
 
         $recipients = $contract->notificationRecipients()

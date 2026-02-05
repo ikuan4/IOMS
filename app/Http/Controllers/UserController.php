@@ -374,6 +374,7 @@ class UserController extends Controller
                     ->all();
 
                 if (is_array($pivotRoleIds) && count($pivotRoleIds) > 0) {
+                    /** @var \Illuminate\Support\Collection<int, Role> $pivotRoles */
                     $pivotRoles = Role::withTrashed()->whereIn('id', $pivotRoleIds)->get();
                     foreach ($pivotRoles as $pivotRole) {
                         if ($pivotRole->trashed() || ! $this->roleIsActive($pivotRole)) {
@@ -530,6 +531,7 @@ class UserController extends Controller
 
         $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
+        /** @var \App\Models\Role|null $role */
         $role = Role::withTrashed()->find($user->role_id);
 
         // Prevent restoring user if assigned role is trashed/inactive or its branch is trashed
@@ -542,7 +544,8 @@ class UserController extends Controller
             try {
                 $currentUser = Auth::user();
                 if (!($currentUser && $currentUser->isSuperAdmin()) ) {
-                    if ($role->branch_id !== null) {
+                        if ($role->branch_id !== null) {
+                        /** @var \App\Models\Branch|null $branch */
                         $branch = Branch::withTrashed()->find($role->branch_id);
                         if ($branch && $branch->trashed()) {
                             return back()->with('error', 'Cannot restore user because the assigned role is inactive or deleted.');
@@ -591,6 +594,7 @@ class UserController extends Controller
      */
     public function checkDependencies(Request $request, int $id): \Illuminate\Http\JsonResponse
     {
+        /** @var User $user */
         $user = User::withTrashed()->with(['role' => function($q) { $q->withTrashed(); }, 'branch' => function($q) { $q->withTrashed(); }])->findOrFail($id);
 
         $this->authorize('view', $user);
@@ -601,9 +605,10 @@ class UserController extends Controller
         // Check if user is deleted and needs restore
         if ($user->trashed()) {
             // Check role status
-            if ($user->role_id) {
+                if ($user->role_id) {
+                /** @var Role|null $role */
                 $role = $user->role;
-                if ($role && $role->trashed()) {
+                if ($role instanceof Role && $role->trashed()) {
                     $canProceed = false;
                     $dependencies[] = [
                         'type' => 'deleted_role',
@@ -622,8 +627,9 @@ class UserController extends Controller
 
             // Check branch status
             if ($user->branch_id) {
+                /** @var Branch|null $branch */
                 $branch = $user->branch;
-                if ($branch && $branch->trashed()) {
+                if ($branch instanceof Branch && $branch->trashed()) {
                     $canProceed = false;
                     $dependencies[] = [
                         'type' => 'deleted_branch',
@@ -638,8 +644,9 @@ class UserController extends Controller
         if (!$user->trashed() && !$user->active) {
             // Check role status
             if ($user->role_id) {
+                /** @var Role|null $role */
                 $role = $user->role;
-                if ($role && !($role->is_active ?? true)) {
+                if ($role instanceof Role && !($role->is_active ?? true)) {
                     $canProceed = false;
                     $dependencies[] = [
                         'type' => 'inactive_role',
