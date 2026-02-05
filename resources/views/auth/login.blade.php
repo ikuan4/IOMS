@@ -24,7 +24,7 @@
     </script>
 
     {{-- Load app CSS/JS via Vite --}}
-    @vite(['resources/css/login.css', 'resources/js/login.js'])
+    {{-- Vite disabled for Render deployment --}}
 </head>
 
 <body class="layout-root">
