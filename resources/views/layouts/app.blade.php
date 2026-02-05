@@ -15,7 +15,6 @@
         'resources/css/dashboard.css',
         'resources/js/app.js',
         'resources/js/dashboard.js',
-        'resources/js/spa-navigation.js',
     ])
 
     <!-- Feather icons -->

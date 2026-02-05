@@ -1,4 +1,5 @@
 import './bootstrap';
+import { initSpaNavigation } from './spa-navigation';
 
 function initHeader() {
 	const toggle = document.getElementById('userMenuToggle');
@@ -43,6 +44,7 @@ window.initAppUI = function () {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+	initSpaNavigation();
 	if (typeof window.initAppUI === 'function') {
 		window.initAppUI();
 	}
@@ -50,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Custom SPA system used in this codebase
 window.addEventListener('spa:navigated', () => {
+	initSpaNavigation();
 	if (typeof window.initAppUI === 'function') {
 		window.initAppUI();
 	}
@@ -57,6 +60,7 @@ window.addEventListener('spa:navigated', () => {
 
 // Compatibility hooks if PJAX is used elsewhere
 document.addEventListener('pjax:complete', () => {
+	initSpaNavigation();
 	if (typeof window.initAppUI === 'function') {
 		window.initAppUI();
 	}
@@ -65,6 +69,7 @@ document.addEventListener('pjax:complete', () => {
 if (window.jQuery) {
 	try {
 		window.jQuery(document).on('pjax:end', function () {
+			initSpaNavigation();
 			if (typeof window.initAppUI === 'function') {
 				window.initAppUI();
 			}

@@ -13,7 +13,7 @@ export default defineConfig({
                 // dashboard-specific assets used via @vite in Blade
                 'resources/css/dashboard.css',
                 'resources/js/dashboard.js',
-                'resources/js/spa-navigation.js'
+
             ],
             refresh: true,
         }),

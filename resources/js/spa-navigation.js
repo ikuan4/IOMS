@@ -1,13 +1,11 @@
-// SPA Navigation System
-// Handles client-side routing to prevent header/sidebar reloads
+// SPA Navigation System (no inline Blade scripts)
+// Replaces ONLY #pjax-container to keep sidebar/header mounted.
 
 class SPANavigator {
     constructor() {
         this.mainContent = null;
         this.isNavigating = false;
-        this.currentUrl = window.location.href;
-        this.cache = new Map();
-        this.maxCacheSize = 10;
+        this.currentUrl = null;
     }
 
     init() {
@@ -17,85 +15,94 @@ class SPANavigator {
             return;
         }
 
-        // Intercept all internal navigation clicks
+        // Save initial state (normalize to current origin to avoid http/https proxy mismatches)
+        this.currentUrl = this.normalizeInternalUrl(window.location.href)?.href ?? window.location.href;
+        history.replaceState({ url: this.currentUrl }, '', this.currentUrl);
+
+        // Intercept all internal navigation clicks (delegated)
         this.interceptLinks();
 
         // Handle browser back/forward buttons
         window.addEventListener('popstate', (e) => {
-            if (e.state && e.state.url) {
-                this.loadPage(e.state.url, false);
-            }
+            const target = (e?.state && e.state.url) ? e.state.url : window.location.href;
+            this.loadPage(target, { addToHistory: false, scrollTop: false });
         });
+    }
 
-        // Save initial state
-        history.replaceState({ url: this.currentUrl }, '', this.currentUrl);
+    normalizeInternalUrl(rawUrl) {
+        if (!rawUrl) return null;
+        try {
+            const parsed = new URL(rawUrl, window.location.href);
+
+            // External -> ignore
+            if (parsed.hostname && parsed.hostname !== window.location.hostname) {
+                return null;
+            }
+
+            // Force same-origin (fixes production where APP_URL is http behind https proxy)
+            const normalized = new URL(parsed.pathname + parsed.search + parsed.hash, window.location.origin);
+            return normalized;
+        } catch {
+            return null;
+        }
     }
 
     interceptLinks() {
-        document.addEventListener('click', (e) => {
-            // Find the closest anchor tag
-            const link = e.target.closest('a');
+        if (document.__spaLinksIntercepted) return;
 
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a');
             if (!link) return;
 
-            // Skip if it's an external link, has target="_blank", or is a special link
-            const href = link.getAttribute('href');
-            if (!href ||
-                href.startsWith('#') ||
-                href.startsWith('javascript:') ||
-                href.startsWith('mailto:') ||
-                href.startsWith('tel:') ||
+            const hrefAttr = link.getAttribute('href');
+            if (!hrefAttr ||
+                hrefAttr.startsWith('#') ||
+                hrefAttr.startsWith('javascript:') ||
+                hrefAttr.startsWith('mailto:') ||
+                hrefAttr.startsWith('tel:') ||
                 link.target === '_blank' ||
                 link.hasAttribute('download') ||
-                link.classList.contains('no-spa')) {
+                link.classList.contains('no-spa') ||
+                link.closest('.sidebar-footer') ||
+                hrefAttr.includes('logout')) {
                 return;
             }
 
-            // Determine if link is external. In production behind proxies, generated URLs may differ by scheme
-            // (http vs https), so we compare hostname instead of full origin.
-            let isExternal = false;
-            try {
-                const parsed = new URL(link.href, window.location.href);
-                isExternal = parsed.hostname && parsed.hostname !== window.location.hostname;
-            } catch {
-                isExternal = false;
-            }
-            if (isExternal) {
-                return;
-            }
+            const normalized = this.normalizeInternalUrl(link.href || hrefAttr);
+            if (!normalized) return;
 
-            // Skip if link is in sidebar-footer or for logout
-            if (link.closest('.sidebar-footer') || href.includes('logout')) {
+            // Same-page hash navigation should not be intercepted
+            if (normalized.pathname === window.location.pathname && normalized.search === window.location.search && normalized.hash) {
                 return;
             }
 
             e.preventDefault();
 
-            const url = link.href;
+            const url = normalized.href;
             if (url !== this.currentUrl) {
-                this.navigate(url);
+                this.loadPage(url, { addToHistory: true, scrollTop: true });
             }
         });
+
+        document.__spaLinksIntercepted = true;
     }
 
-    navigate(url) {
+    async loadPage(url, { addToHistory = true, scrollTop = true } = {}) {
         if (this.isNavigating) return;
 
-        this.loadPage(url, true);
-    }
-
-    async loadPage(url, addToHistory = true) {
-        if (this.isNavigating) return;
+        const normalized = this.normalizeInternalUrl(url);
+        if (!normalized) {
+            window.location.href = url;
+            return;
+        }
 
         this.isNavigating = true;
         this.showLoadingIndicator();
 
         try {
-            // Add timestamp to URL to bypass cache
-            const fetchUrl = new URL(url);
+            const fetchUrl = new URL(normalized.href);
             fetchUrl.searchParams.set('_t', Date.now());
 
-            // Always fetch fresh content (disable cache for JavaScript updates)
             const response = await fetch(fetchUrl.toString(), {
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -108,61 +115,61 @@ class SPANavigator {
                 cache: 'no-store'
             });
 
+            // If auth redirects happen, do a hard navigation to the final URL.
+            if (response.redirected && response.url) {
+                const finalUrl = this.normalizeInternalUrl(response.url)?.href;
+                if (finalUrl && !finalUrl.includes('/login')) {
+                    // continue normally
+                } else {
+                    window.location.href = response.url;
+                    return;
+                }
+            }
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const html = await response.text();
-
-            // Extract main content from the response
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
+
             const newMainContent = doc.querySelector('#pjax-container') || doc.querySelector('main.main');
-
-            if (newMainContent) {
-                // Update the main content
-                this.mainContent.innerHTML = newMainContent.innerHTML;
-
-                // Update page title
-                const newTitle = doc.querySelector('title');
-                if (newTitle) {
-                    document.title = newTitle.textContent;
-                }
-
-                // Update active states in sidebar
-                this.updateActiveStates(url);
-
-                // Re-initialize feather icons
-                if (window.feather) {
-                    window.feather.replace();
-                }
-
-                // Execute any scripts in the new content
-                this.executeScripts(newMainContent);
-
-                // Trigger custom event for other modules
-                window.dispatchEvent(new CustomEvent('spa:navigated', {
-                    detail: { url }
-                }));
-
-                // Update URL and history
-                if (addToHistory) {
-                    history.pushState({ url }, '', url);
-                }
-
-                this.currentUrl = url;
-
-                // Scroll to top
-                window.scrollTo(0, 0);
-            } else {
-                throw new Error('Could not find main content in response');
+            if (!newMainContent) {
+                throw new Error('Could not find #pjax-container in response');
             }
 
+            // Swap ONLY the container
+            this.mainContent.innerHTML = newMainContent.innerHTML;
+
+            // Update title
+            const newTitle = doc.querySelector('title');
+            if (newTitle) {
+                document.title = newTitle.textContent;
+            }
+
+            // Update active states in sidebar
+            this.updateActiveStates(normalized.href);
+
+            // Execute scripts contained in the swapped content
+            this.executeScripts(newMainContent);
+
+            // Update URL and history
+            if (addToHistory) {
+                history.pushState({ url: normalized.href }, '', normalized.href);
+            }
+            this.currentUrl = normalized.href;
+
+            window.dispatchEvent(new CustomEvent('spa:navigated', {
+                detail: { url: normalized.href }
+            }));
+
+            if (scrollTop) {
+                window.scrollTo(0, 0);
+            }
         } catch (error) {
             console.error('SPA Navigation Error:', error);
-            // Fallback to full page load
             window.location.href = url;
-            return;
         } finally {
             this.isNavigating = false;
             this.hideLoadingIndicator();
@@ -284,18 +291,17 @@ class SPANavigator {
     }
 }
 
-// Initialize SPA navigation when DOM is ready
-let spaNavigator = null;
+let spaNavigatorSingleton = null;
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        spaNavigator = new SPANavigator();
-        spaNavigator.init();
-    });
-} else {
-    spaNavigator = new SPANavigator();
-    spaNavigator.init();
+export function initSpaNavigation() {
+    if (spaNavigatorSingleton) {
+        // Ensure container reference stays valid
+        spaNavigatorSingleton.mainContent = document.querySelector('#pjax-container') || document.querySelector('main.main');
+        return spaNavigatorSingleton;
+    }
+
+    spaNavigatorSingleton = new SPANavigator();
+    spaNavigatorSingleton.init();
+    window.spaNavigator = spaNavigatorSingleton;
+    return spaNavigatorSingleton;
 }
-
-// Export for potential external use
-window.spaNavigator = spaNavigator;
