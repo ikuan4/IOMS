@@ -1,6 +1,6 @@
 FROM php:8.2-cli
 
-# Install system + PHP dependencies (Postgres, GD, mbstring)
+# Install system + PHP deps + Node
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     libfreetype6-dev \
     libonig-dev \
+    nodejs \
+    npm \
     zip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
@@ -21,20 +23,20 @@ RUN apt-get update && apt-get install -y \
         zip \
         gd
 
-# Install Composer
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /var/www
-
-# Copy application files
 COPY . .
 
-# Install PHP dependencies (no scripts during build)
+# PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-scripts
 
-# Expose Render port
-EXPOSE 10000
+# FRONTEND BUILD (THIS FIXES THE UI)
+RUN npm install && npm run build
 
-# Start Laravel (NO migrations here)
+# Clear caches
+RUN php artisan view:clear && php artisan config:clear
+
+EXPOSE 10000
 CMD php artisan serve --host=0.0.0.0 --port=10000

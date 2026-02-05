@@ -11,7 +11,13 @@
     <link rel="icon" type="image/png" href="{{ asset('images/MSHCS_logo.png') }}" />
 
     <!-- Load Dashboard CSS -->
-    {{-- Vite disabled for Render deployment --}}
+    @vite([
+        'resources/css/app.css',
+        'resources/css/dashboard.css',
+        'resources/js/app.js',
+        'resources/js/dashboard.js',
+        'resources/js/spa-navigation.js',
+    ])
 
     <!-- Feather icons -->
     <script src="https://unpkg.com/feather-icons"></script>
@@ -241,7 +247,7 @@
 @include('partials.confirmation-modal')
 
 <!-- Dashboard JS -->
-{{-- Vite disabled for Render deployment --}}
+
 
 @stack('scripts')
 </body>
