@@ -53,15 +53,23 @@ class DatabaseSeeder extends Seeder
         }
 
         // Spatie permissions + roles
-        $hasSpatieCore = Schema::hasTable($spatieTables['roles'])
-            && Schema::hasTable($spatieTables['permissions'])
-            && Schema::hasTable($spatieTables['role_has_permissions']);
+        $spatieCoreChecks = [
+            $spatieTables['roles'],
+            $spatieTables['permissions'],
+            $spatieTables['role_has_permissions'],
+        ];
+        $missingSpatieCoreTables = array_values(array_filter(
+            $spatieCoreChecks,
+            static fn (string $table) => !Schema::hasTable($table)
+        ));
+        $hasSpatieCore = empty($missingSpatieCoreTables);
 
         if ($hasSpatieCore) {
             $this->call(\Database\Seeders\RolePermissionSeeder::class);
             $this->call(\Database\Seeders\GrantDeveloperAllPermissionsSeeder::class);
         } else {
-            $this->command?->warn('Skipping permission/role seeders: Spatie permission tables are missing.');
+            $missingList = empty($missingSpatieCoreTables) ? '' : (' Missing: ' . implode(', ', $missingSpatieCoreTables));
+            $this->command?->warn('Skipping permission/role seeders: Spatie permission tables are missing.' . $missingList);
         }
 
         // Create FrancisJr user
