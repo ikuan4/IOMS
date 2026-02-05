@@ -120,7 +120,7 @@
 <div class="app">
     @include('partials.sidebar')
 
-    <main class="main">
+    <main class="main" id="pjax-container">
         @yield('content')
     </main>
 </div>

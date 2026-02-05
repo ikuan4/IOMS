@@ -11,7 +11,7 @@ class SPANavigator {
     }
 
     init() {
-        this.mainContent = document.querySelector('main.main');
+        this.mainContent = document.querySelector('#pjax-container') || document.querySelector('main.main');
         if (!this.mainContent) {
             console.warn('SPA Navigation: main content container not found');
             return;
@@ -43,10 +43,24 @@ class SPANavigator {
             if (!href ||
                 href.startsWith('#') ||
                 href.startsWith('javascript:') ||
+                href.startsWith('mailto:') ||
+                href.startsWith('tel:') ||
                 link.target === '_blank' ||
                 link.hasAttribute('download') ||
-                link.classList.contains('no-spa') ||
-                href.startsWith('http') && !href.startsWith(window.location.origin)) {
+                link.classList.contains('no-spa')) {
+                return;
+            }
+
+            // Determine if link is external. In production behind proxies, generated URLs may differ by scheme
+            // (http vs https), so we compare hostname instead of full origin.
+            let isExternal = false;
+            try {
+                const parsed = new URL(link.href, window.location.href);
+                isExternal = parsed.hostname && parsed.hostname !== window.location.hostname;
+            } catch {
+                isExternal = false;
+            }
+            if (isExternal) {
                 return;
             }
 
@@ -103,7 +117,7 @@ class SPANavigator {
             // Extract main content from the response
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-            const newMainContent = doc.querySelector('main.main');
+            const newMainContent = doc.querySelector('#pjax-container') || doc.querySelector('main.main');
 
             if (newMainContent) {
                 // Update the main content

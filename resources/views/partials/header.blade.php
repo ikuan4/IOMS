@@ -125,29 +125,3 @@
     </div>
 
 </header>
-
-@push('scripts')
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const toggle   = document.getElementById('userMenuToggle');
-    const dropdown = document.getElementById('userMenuDropdown');
-
-    if (!toggle || !dropdown) return;
-
-    // Toggle dropdown on avatar/name click
-    toggle.addEventListener('click', function (e) {
-        e.stopPropagation();
-        const isOpen = dropdown.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    });
-
-    // Close when clicking outside
-    document.addEventListener('click', function () {
-        if (dropdown.classList.contains('open')) {
-            dropdown.classList.remove('open');
-            toggle.setAttribute('aria-expanded', 'false');
-        }
-    });
-});
-</script>
-@endpush
