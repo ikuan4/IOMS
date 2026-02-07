@@ -60,6 +60,23 @@ return [
             'report' => false,
         ],
 
+        // Cloudinary (persistent storage for user-uploaded avatars on Render)
+        // Configured via environment variables only.
+        'cloudinary' => [
+            'driver' => 'cloudinary',
+            // Preferred: set CLOUDINARY_URL (cloudinary://API_KEY:API_SECRET@CLOUD_NAME)
+            'url' => env('CLOUDINARY_URL') ?: null,
+
+            // Fallback: set CLOUDINARY_CLOUD_NAME / CLOUDINARY_KEY / CLOUDINARY_SECRET
+            // Used when CLOUDINARY_URL is not present.
+            'cloud' => env('CLOUDINARY_CLOUD_NAME', env('CLOUDINARY_CLOUD')),
+            'key' => env('CLOUDINARY_KEY', env('CLOUDINARY_API_KEY')),
+            'secret' => env('CLOUDINARY_SECRET', env('CLOUDINARY_API_SECRET')),
+
+            // Always request HTTPS delivery URLs.
+            'secure' => true,
+        ],
+
     ],
 
     /*

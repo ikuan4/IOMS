@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
 use App\Models\Branch;
 use App\Policies\BranchPolicy;
+use Spatie\Permission\PermissionRegistrar;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,6 +26,15 @@ class AppServiceProvider extends ServiceProvider
     {
         if (app()->environment('production')) {
             URL::forceScheme('https');
+        }
+
+        // Reset Spatie permission cache once during deploy/startup migrations.
+        // This runs in the `migrate` command only (not on HTTP requests).
+        if ($this->app->runningInConsole()) {
+            $argv = $_SERVER['argv'] ?? [];
+            if (is_array($argv) && in_array('migrate', $argv, true)) {
+                app(PermissionRegistrar::class)->forgetCachedPermissions();
+            }
         }
 
         // Allow developer user (no role, no branch) to bypass authorization checks

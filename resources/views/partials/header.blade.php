@@ -84,8 +84,8 @@
                     aria-expanded="false"
                 >
                     <div class="avatar">
-                        @if($user->avatar)
-                            <img src="{{ asset('storage/'.$user->avatar) }}" alt="{{ $user->name }}'s avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />
+                        @if(!empty($user->avatar_url))
+                            <img src="{{ $user->avatar_url }}" alt="{{ $user->name }}'s avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />
                         @else
                             {{ strtoupper(substr($user->name, 0, 2)) }}
                         @endif

@@ -118,8 +118,8 @@
                     <div style="padding:8px;border-radius:10px;background:var(--card, #fff);text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;width:420px;box-sizing:border-box;margin:0 auto;">
                         <div style="margin-bottom:12px;font-weight:700;font-size:15px;">Profile Photo</div>
                         <div id="avatarPreviewContainer" style="width:320px;height:320px;margin:0 auto;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--muted-bg,#f3f4f6);position:relative;">
-                            <img id="avatarPreview" src="{{ $user->avatar ? asset('storage/'.$user->avatar) : '' }}" alt="{{ $user->name }} avatar" style="max-width:100%;max-height:100%;display:{{ $user->avatar ? 'block' : 'none' }};object-fit:cover;" />
-                            <div id="avatarIcon" style="position:absolute;display:{{ $user->avatar ? 'none' : 'flex' }};align-items:center;justify-content:center;width:100%;height:100%;">
+                            <img id="avatarPreview" src="{{ $user->avatar_url ?? '' }}" alt="{{ $user->name }} avatar" style="max-width:100%;max-height:100%;display:{{ !empty($user->avatar_url) ? 'block' : 'none' }};object-fit:cover;" />
+                            <div id="avatarIcon" style="position:absolute;display:{{ !empty($user->avatar_url) ? 'none' : 'flex' }};align-items:center;justify-content:center;width:100%;height:100%;">
                                 <!-- Colored cloud upload icon -->
                                 <svg width="192" height="144" viewBox="0 0 96 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                     <g fill-rule="evenodd">
@@ -136,7 +136,7 @@
                             </div>
                             <input id="avatar" name="avatar" type="file" accept="image/*" style="position:absolute;left:-9999px;" />
                             <input type="hidden" name="remove_avatar" id="remove_avatar" value="0" />
-                            <div id="avatarFilename" style="font-size:13px;color:var(--muted,#6b7280);display:{{ $user->avatar ? 'block' : 'none' }};">{{ $user->avatar ? basename($user->avatar) : '' }}</div>
+                            <div id="avatarFilename" style="font-size:13px;color:var(--muted,#6b7280);display:{{ !empty($user->avatar_url) ? 'block' : 'none' }};">{{ !empty($user->avatar_url) ? basename(parse_url($user->avatar_url, PHP_URL_PATH) ?? '') : '' }}</div>
                         </div>
                         <div style="margin-top:10px;font-size:13px;color:var(--muted,#6b7280);">Drag and drop an image or click to upload. JPG, PNG. Max 2MB.</div>
                     </div>
@@ -148,6 +148,7 @@
 
     <script>
         // Avatar preview and drag-and-drop logic
+        const formEl = document.querySelector('form[action="{{ route('profile.update') }}"]');
         const avatarInput = document.getElementById('avatar');
         const avatarPreview = document.getElementById('avatarPreview');
         const avatarIcon = document.getElementById('avatarIcon');
@@ -156,32 +157,55 @@
         const removeAvatarInput = document.getElementById('remove_avatar');
         const avatarPreviewContainer = document.getElementById('avatarPreviewContainer');
 
-        // File preview helper
-        function previewFile(file) {
-            if (file && file.type.startsWith('image/')) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    avatarPreview.src = event.target.result;
-                    avatarPreview.style.display = 'block';
-                    avatarIcon.style.display = 'none';
-                    avatarFilename.textContent = file.name;
-                    avatarFilename.style.display = 'block';
-                    removeAvatarInput.value = '0';
+        let previewObjectUrl = null;
+
+        function setPreviewObjectUrl(file) {
+            if (!file || !file.type || !file.type.startsWith('image/')) return;
+
+            try {
+                if (previewObjectUrl) {
+                    URL.revokeObjectURL(previewObjectUrl);
+                    previewObjectUrl = null;
                 }
-                reader.readAsDataURL(file);
-            }
+            } catch (e) {}
+
+            previewObjectUrl = URL.createObjectURL(file);
+            avatarPreview.src = previewObjectUrl;
+            avatarPreview.style.display = 'block';
+            avatarIcon.style.display = 'none';
+            avatarFilename.textContent = file.name;
+            avatarFilename.style.display = 'block';
+            removeAvatarInput.value = '0';
+        }
+
+        // File preview helper (FILE-ONLY; no base64 handling)
+        function previewFile(file) {
+            setPreviewObjectUrl(file);
         }
 
         // File input change
         avatarInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file) {
+                // Keep in sync with server validation: max 2MB
+                const maxBytes = 2 * 1024 * 1024;
+                if (file.size && file.size > maxBytes) {
+                    alert('Please choose an image up to 2MB.');
+                    avatarInput.value = '';
+                    return;
+                }
                 previewFile(file);
             }
         });
 
         // Remove avatar
         removeAvatarBtn.addEventListener('click', function() {
+            try {
+                if (previewObjectUrl) {
+                    URL.revokeObjectURL(previewObjectUrl);
+                    previewObjectUrl = null;
+                }
+            } catch (e) {}
             avatarPreview.src = '';
             avatarPreview.style.display = 'none';
             avatarIcon.style.display = 'flex';
@@ -227,6 +251,13 @@
             if (files.length > 0) {
                 const file = files[0];
 
+                // Keep in sync with server validation: max 2MB
+                const maxBytes = 2 * 1024 * 1024;
+                if (file.size && file.size > maxBytes) {
+                    alert('Please choose an image up to 2MB.');
+                    return;
+                }
+
                 // Create a new FileList-like object and assign to input
                 const dataTransfer = new DataTransfer();
                 dataTransfer.items.add(file);
@@ -235,6 +266,17 @@
                 // Preview the file
                 previewFile(file);
             }
+        }
+
+        // Enforce FILE-ONLY avatar submissions.
+        // Removes any accidental hidden/text "avatar" fields (e.g. base64 strings) before submit.
+        if (formEl) {
+            formEl.addEventListener('submit', function() {
+                try {
+                    const badAvatarFields = formEl.querySelectorAll('input[name="avatar"]:not([type="file"]), textarea[name="avatar"], select[name="avatar"]');
+                    badAvatarFields.forEach(el => { try { el.remove(); } catch (e) {} });
+                } catch (e) {}
+            });
         }
     </script>
 @endsection

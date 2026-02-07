@@ -9,16 +9,51 @@ use App\Models\Branch;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 
 class UserController extends Controller
 {
     use AuthorizesRequests;
+
+    private function cloudinaryIsConfigured(): bool
+    {
+        $disk = (array) config('filesystems.disks.cloudinary', []);
+        $url = isset($disk['url']) ? (string) $disk['url'] : '';
+
+        if ($url !== '') {
+            // Expected: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+            return (bool) preg_match('/^cloudinary:\/\/[^:\/]+:[^@\/]++@[^\/?#]+/i', $url);
+        }
+
+        return !empty($disk['cloud']) && !empty($disk['key']) && !empty($disk['secret']);
+    }
+
+    private function assertCloudinaryConfigured(): void
+    {
+        $disk = (array) config('filesystems.disks.cloudinary', []);
+        $hasUrl = !empty($disk['url']);
+        $hasKeys = !empty($disk['cloud']) && !empty($disk['key']) && !empty($disk['secret']);
+
+        if ($hasUrl) {
+            $url = (string) $disk['url'];
+            // Expected: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+            if (!preg_match('/^cloudinary:\/\/[^:\/]+:[^@\/]++@[^\/?#]+/i', $url)) {
+                abort(500, 'Cloudinary is misconfigured. CLOUDINARY_URL must look like cloudinary://API_KEY:API_SECRET@CLOUD_NAME.');
+            }
+            return;
+        }
+
+        if (! $hasKeys) {
+            abort(500, 'Cloudinary is not configured. Set CLOUDINARY_URL or CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET.');
+        }
+    }
 
     /* -------------------------------------------------------------
      | Helpers (centralized role safety)
@@ -200,16 +235,31 @@ class UserController extends Controller
             $actorIdInt = (int) $actorId;
         }
 
-        $data = $request->validate([
+        // Enforce avatar as file-only: ignore any non-file "avatar" input (e.g. base64 strings).
+        if (! $request->hasFile('avatar') && $request->has('avatar')) {
+            $request->request->remove('avatar');
+        }
+
+        $avatarFile = $request->file('avatar');
+
+        $rules = [
             'name'      => ['required', 'string', 'max:255'],
             'mobile'    => ['required', 'string', 'max:50', 'unique:users,mobile'],
             'email'     => ['required', 'email', 'max:255', 'unique:users,email'],
             'password'  => ['required', 'string', 'min:8', 'confirmed'],
-            'avatar'    => ['nullable', 'image', 'max:2048'],
             'role_id'   => ['required', 'exists:roles,id'],
             'branch_id' => ['nullable', 'exists:branches,id'],
             'active'    => ['nullable', 'boolean'],
-        ]);
+        ];
+
+        // Validate avatar only when a file is present.
+        if ($avatarFile) {
+            $rules['avatar'] = ['image', 'max:2048'];
+        }
+
+        $data = $request->validate($rules);
+
+        $hasAvatarUpload = $avatarFile instanceof UploadedFile && $avatarFile->isValid();
 
         // Prevent creation of developer-like users (null role_id and null branch_id)
         // Only the seeder or direct database operation should create the developer user
@@ -241,7 +291,7 @@ class UserController extends Controller
         }
 
         // Use transaction with role status re-check to prevent race conditions
-        return DB::transaction(function () use ($request, $data, $role, $actorIdInt) {
+        return DB::transaction(function () use ($request, $data, $role, $actorIdInt, $hasAvatarUpload, $avatarFile) {
             // Re-check role status inside transaction
             $role = Role::withTrashed()->lockForUpdate()->find($data['role_id']);
 
@@ -252,20 +302,34 @@ class UserController extends Controller
                 }
 
             $user = new User();
-            $user->fill($data);
+            // Do not mass-assign the UploadedFile object; Cloudinary upload is handled below.
+            $user->fill(collect($data)->except(['password', 'avatar'])->all());
             $user->password   = Hash::make($data['password']);
             $user->active     = $request->boolean('active', true);
             $user->created_by = $actorIdInt;
 
-            if ($request->hasFile('avatar')) {
-                $path = $request->file('avatar')->store('avatars', 'public');
-                if ($path !== false) {
-                    $user->avatar = $path;
-                }
-            }
-
             $user->branch_id = $request->input('branch_id') ?? $role->branch_id ?? null;
             $user->save();
+
+            // Cloudinary avatar upload (persistent across Render redeploys).
+            // Stores Cloudinary `secure_url` in DB; no local storage/app or public disk usage.
+            if ($hasAvatarUpload) {
+                $this->assertCloudinaryConfigured();
+                $publicId = 'ioms/avatars/user_'.$user->id;
+
+                /** @var array<string,mixed> $result */
+                $result = Cloudinary::uploadApi()->upload($avatarFile->getRealPath(), [
+                    'folder' => 'ioms/avatars',
+                    'public_id' => 'user_'.$user->id,
+                    'overwrite' => true,
+                    'resource_type' => 'image',
+                ]);
+
+                $user->avatar = null; // legacy local-path column (no longer used)
+                $user->avatar_url = $result['secure_url'] ?? null;
+                $user->avatar_public_id = $result['public_id'] ?? $publicId;
+                $user->save();
+            }
 
             AuditLog::log(
                 'create_user',
@@ -311,15 +375,32 @@ class UserController extends Controller
             $actorIdInt = (int) $actorId;
         }
 
-        $data = $request->validate([
+        // Enforce avatar as file-only: ignore any non-file "avatar" input (e.g. base64 strings).
+        if (! $request->hasFile('avatar') && $request->has('avatar')) {
+            $request->request->remove('avatar');
+        }
+
+        $avatarFile = $request->file('avatar');
+
+        $rules = [
             'name'     => ['required', 'string', 'max:255'],
             'mobile'   => ['required', Rule::unique('users')->ignore($user->id)],
             'email'    => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', 'min:8'],
+            'remove_avatar' => ['nullable', 'boolean'],
             'role_id'  => ['required', 'exists:roles,id'],
             'branch_id'=> ['nullable', 'exists:branches,id'],
             'active'   => ['nullable', 'boolean'],
-        ]);
+        ];
+
+        // Validate avatar only when a file is present.
+        if ($avatarFile) {
+            $rules['avatar'] = ['image', 'max:2048'];
+        }
+
+        $data = $request->validate($rules);
+
+        $hasAvatarUpload = $avatarFile instanceof UploadedFile && $avatarFile->isValid();
 
         $role = Role::withTrashed()->find($data['role_id']);
 
@@ -356,7 +437,7 @@ class UserController extends Controller
         // Use transaction with role status re-check
         $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
-        return DB::transaction(function () use ($request, $data, $user, $role, $actorIdInt, $oldValues) {
+        return DB::transaction(function () use ($request, $data, $user, $role, $actorIdInt, $oldValues, $hasAvatarUpload, $avatarFile) {
             // Re-check role status inside transaction
             $role = Role::withTrashed()->lockForUpdate()->find($data['role_id']);
 
@@ -402,6 +483,39 @@ class UserController extends Controller
 
             $user->updated_by = $actorIdInt;
             $user->save();
+
+            // Cloudinary avatar replacement/removal (persistent storage).
+            if ($hasAvatarUpload) {
+                $this->assertCloudinaryConfigured();
+                // Overwrite the user's Cloudinary asset (stable public_id per user).
+                // If an older/different public_id exists, delete it to avoid orphaned assets.
+                $targetPublicId = 'ioms/avatars/user_'.$user->id;
+                if ($user->avatar_public_id && $user->avatar_public_id !== $targetPublicId) {
+                    Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
+                }
+
+                /** @var array<string,mixed> $result */
+                $result = Cloudinary::uploadApi()->upload($avatarFile->getRealPath(), [
+                    'folder' => 'ioms/avatars',
+                    'public_id' => 'user_'.$user->id,
+                    'overwrite' => true,
+                    'resource_type' => 'image',
+                ]);
+
+                $user->avatar = null;
+                $user->avatar_url = $result['secure_url'] ?? $user->avatar_url;
+                $user->avatar_public_id = $result['public_id'] ?? $targetPublicId;
+                $user->save();
+            }
+
+            if ($request->boolean('remove_avatar', false) && $user->avatar_public_id) {
+                $this->assertCloudinaryConfigured();
+                Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
+                $user->avatar = null;
+                $user->avatar_url = null;
+                $user->avatar_public_id = null;
+                $user->save();
+            }
 
             AuditLog::log(
                 'update_user',
@@ -469,14 +583,30 @@ class UserController extends Controller
             abort(403);
         }
 
-        $data = $request->validate([
+        // Enforce avatar as file-only: ignore any non-file "avatar" input (e.g. base64 strings).
+        // This also prevents huge base64 strings from being flashed into session on validation errors.
+        if (! $request->hasFile('avatar') && $request->has('avatar')) {
+            $request->request->remove('avatar');
+        }
+
+        $avatarFile = $request->file('avatar');
+
+        $rules = [
             'name'     => ['required', 'string', 'max:255'],
             // keep backward compatible: allow blank to preserve current value
             'email'    => ['nullable', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', 'min:8'],
-            'avatar'   => ['nullable', 'image', 'max:2048'],
             'remove_avatar' => ['nullable', 'boolean'],
-        ]);
+        ];
+
+        // Validate avatar only when a file is present.
+        if ($avatarFile) {
+            $rules['avatar'] = ['image', 'max:2048'];
+        }
+
+        $data = $request->validate($rules);
+
+        $hasAvatarUpload = $avatarFile instanceof UploadedFile && $avatarFile->isValid();
 
         $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
@@ -487,25 +617,90 @@ class UserController extends Controller
             $user->password = Hash::make($data['password']);
         }
 
-        // Handle avatar upload
-        if ($request->hasFile('avatar')) {
-            // Delete old avatar if exists
-            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
-                Storage::disk('public')->delete($user->avatar);
-            }
+        // Cloudinary avatar upload / replacement (persistent storage).
+        // Only execute when a file is actually uploaded.
+        if ($hasAvatarUpload) {
+            if ($this->cloudinaryIsConfigured()) {
+                try {
+                    $targetPublicId = 'ioms/avatars/user_'.$user->id;
+                    if ($user->avatar_public_id && $user->avatar_public_id !== $targetPublicId) {
+                        Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
+                    }
 
-            $path = $request->file('avatar')->store('avatars', 'public');
-            if ($path !== false) {
-                $user->avatar = $path;
+                    /** @var array<string,mixed> $result */
+                    $result = Cloudinary::uploadApi()->upload($avatarFile->getRealPath(), [
+                        'folder' => 'ioms/avatars',
+                        'public_id' => 'user_'.$user->id,
+                        'overwrite' => true,
+                        'resource_type' => 'image',
+                    ]);
+
+                    $user->avatar = null;
+                    $user->avatar_url = $result['secure_url'] ?? $user->avatar_url;
+                    $user->avatar_public_id = $result['public_id'] ?? $targetPublicId;
+                } catch (\Throwable $e) {
+                    return back()
+                        ->withInput($request->except(['password', 'password_confirmation']))
+                        ->with('error', 'Profile photo upload failed (Cloudinary not configured or unreachable).');
+                }
+            } else {
+                // Local fallback (useful for local dev when Cloudinary env vars are not set).
+                // Stored under public/storage/avatars which is already present in this repo.
+                $dir = public_path('storage/avatars');
+                try {
+                    if (!File::exists($dir)) {
+                        File::makeDirectory($dir, 0755, true);
+                    }
+
+                    $ext = (string) ($avatarFile->guessExtension() ?: $avatarFile->getClientOriginalExtension() ?: 'jpg');
+                    $ext = strtolower(preg_replace('/[^a-z0-9]+/i', '', $ext) ?: 'jpg');
+                    $filename = 'user_'.$user->id.'.'.$ext;
+
+                    $avatarFile->move($dir, $filename);
+
+                    $user->avatar = null;
+                    $user->avatar_public_id = null;
+                    $user->avatar_url = asset('storage/avatars/'.$filename);
+                } catch (\Throwable $e) {
+                    return back()
+                        ->withInput($request->except(['password', 'password_confirmation']))
+                        ->with('error', 'Profile photo upload failed.');
+                }
             }
         }
 
-        // Handle avatar removal
-        if ($request->boolean('remove_avatar', false)) {
-            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
-                Storage::disk('public')->delete($user->avatar);
+        // Cloudinary avatar removal.
+        if ($request->boolean('remove_avatar', false) && $user->avatar_public_id) {
+            // Removal should delete the existing Cloudinary asset.
+            if ($this->cloudinaryIsConfigured()) {
+                try {
+                    Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
+                } catch (\Throwable $e) {
+                    // ignore (we still clear DB pointers below)
+                }
             }
             $user->avatar = null;
+            $user->avatar_url = null;
+            $user->avatar_public_id = null;
+        }
+
+        // Local avatar removal fallback (when Cloudinary isn't used).
+        if ($request->boolean('remove_avatar', false) && !$user->avatar_public_id && $user->avatar_url) {
+            try {
+                $path = parse_url((string) $user->avatar_url, PHP_URL_PATH);
+                if (is_string($path) && str_contains($path, '/storage/avatars/')) {
+                    $basename = basename($path);
+                    $full = public_path('storage/avatars/'.$basename);
+                    if (is_string($basename) && $basename !== '' && File::exists($full)) {
+                        File::delete($full);
+                    }
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
+            $user->avatar = null;
+            $user->avatar_url = null;
+            $user->avatar_public_id = null;
         }
 
         $user->updated_by = $user->id;

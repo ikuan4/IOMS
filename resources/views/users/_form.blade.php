@@ -121,7 +121,7 @@
             <div style="padding:8px;border-radius:10px;background:var(--card, #fff);text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;width:420px;box-sizing:border-box;margin:0 auto;">
                 <div style="margin-bottom:12px;font-weight:700;font-size:15px;">User Photo (optional)</div>
                 <div id="avatarPreviewContainer" style="width:320px;height:320px;margin:0 auto;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--muted-bg,#f3f4f6);">
-                    <img id="avatarPreview" src="{{ old('avatar_preview', $user->avatar ? asset('storage/'.$user->avatar) : '') }}" alt="{{ $user->name }} avatar" style="max-width:100%;max-height:100%;display:block;object-fit:cover;" />
+                    <img id="avatarPreview" src="{{ $user->avatar_url ?? '' }}" alt="{{ $user->name }} avatar" style="max-width:100%;max-height:100%;display:block;object-fit:cover;" />
                     <div id="avatarIcon" style="position:absolute;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">
                         <!-- Colored cloud upload icon (blue cloud + solid white arrow) -->
                         <svg width="192" height="144" viewBox="0 0 96 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -140,7 +140,7 @@
                     </div>
                     <input id="avatar" name="avatar" type="file" accept="image/*" style="position:absolute;left:-9999px;" />
                     <input type="hidden" name="remove_avatar" id="remove_avatar" value="0" />
-                    <div id="avatarFilename" style="font-size:13px;color:var(--muted,#6b7280);{{ $user->avatar ? 'display:block;' : 'display:none;' }}" data-initial-filename="{{ $user->avatar ? basename($user->avatar) : '' }}">{{ $user->avatar ? basename($user->avatar) : '' }}</div>
+                    <div id="avatarFilename" style="font-size:13px;color:var(--muted,#6b7280);{{ !empty($user->avatar_url) ? 'display:block;' : 'display:none;' }}" data-initial-filename="{{ !empty($user->avatar_url) ? basename(parse_url($user->avatar_url, PHP_URL_PATH) ?? '') : '' }}">{{ !empty($user->avatar_url) ? basename(parse_url($user->avatar_url, PHP_URL_PATH) ?? '') : '' }}</div>
                 </div>
                 <div style="margin-top:10px;font-size:13px;color:var(--muted,#6b7280);">Supported files: JPG, PNG. Max 2MB.</div>
             </div>
@@ -154,6 +154,8 @@
         const input = document.getElementById('avatar');
         const img = document.getElementById('avatarPreview');
         const container = document.getElementById('avatarPreviewContainer');
+
+        let previewObjectUrl = null;
 
         // Holds a dropped File when the browser prevents assigning to input.files
         let pendingAvatarFile = null;
@@ -173,6 +175,12 @@
                 if (filenameEl) { filenameEl.textContent = ''; filenameEl.style.display = 'none'; }
                 showIcon();
                 pendingAvatarFile = null;
+                try {
+                    if (previewObjectUrl) {
+                        URL.revokeObjectURL(previewObjectUrl);
+                        previewObjectUrl = null;
+                    }
+                } catch (e) {}
                 return;
             }
             if (!file.type.startsWith('image/')) {
@@ -190,9 +198,16 @@
                 return;
             }
             if (filenameEl) { filenameEl.textContent = file.name; filenameEl.style.display = 'block'; }
-            const reader = new FileReader();
-            reader.onload = function(ev){ img.src = ev.target.result; hideIcon(); };
-            reader.readAsDataURL(file);
+            // FILE-ONLY preview (no base64): use blob URL
+            try {
+                if (previewObjectUrl) {
+                    URL.revokeObjectURL(previewObjectUrl);
+                    previewObjectUrl = null;
+                }
+            } catch (e) {}
+            previewObjectUrl = URL.createObjectURL(file);
+            img.src = previewObjectUrl;
+            hideIcon();
 
             // reset remove flag when user picks a file
             try { document.getElementById('remove_avatar').value = '0'; } catch(e){}
@@ -228,7 +243,15 @@
                     try { input.value = ''; } catch(e){}
                     pendingAvatarFile = null;
                     if (filenameEl) { filenameEl.textContent = ''; filenameEl.style.display = 'none'; }
-                    if (img) { img.src = ''; }
+                    if (img) {
+                        try {
+                            if (previewObjectUrl) {
+                                URL.revokeObjectURL(previewObjectUrl);
+                                previewObjectUrl = null;
+                            }
+                        } catch (e) {}
+                        img.src = '';
+                    }
                     showIcon();
                 } catch (err) { dbg('removeAvatar error', err); }
             });
@@ -269,6 +292,12 @@
             if (!form) return;
             form.addEventListener('submit', function(e){
                 try {
+                    // Enforce FILE-ONLY avatar submissions: remove any non-file avatar fields before submit.
+                    try {
+                        const badAvatarFields = form.querySelectorAll('input[name="avatar"]:not([type="file"]), textarea[name="avatar"], select[name="avatar"]');
+                        badAvatarFields.forEach(el => { try { el.remove(); } catch (e) {} });
+                    } catch (e) {}
+
                     const hasFile = input && input.files && input.files.length > 0;
                     dbg('submit triggered', { hasFile, pendingAvatarFile });
 

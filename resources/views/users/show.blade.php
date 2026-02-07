@@ -8,8 +8,8 @@
         <div class="card-body">
             <div style="display:flex;gap:18px;align-items:flex-start;">
                 <div style="flex:0 0 160px;">
-                    @if($user->avatar)
-                        <img src="{{ asset('storage/' . $user->avatar) }}" alt="avatar" style="width:150px;height:150px;object-fit:cover;border-radius:8px;" />
+                        @if($user->avatar_url)
+                            <img src="{{ $user->avatar_url }}" alt="avatar" style="width:150px;height:150px;object-fit:cover;border-radius:8px;" />
                     @else
                         <div style="width:150px;height:150px;border-radius:8px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>

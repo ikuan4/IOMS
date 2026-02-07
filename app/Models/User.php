@@ -19,6 +19,8 @@ use App\Models\Branch;
 /**
  * @property int $id
  * @property string|null $avatar
+ * @property string|null $avatar_url
+ * @property string|null $avatar_public_id
  * @property string $name
  * @property string|null $email
  * @property string $password
