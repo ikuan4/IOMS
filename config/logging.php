@@ -54,7 +54,9 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            // Default to both file + stderr so exceptions are visible in container logs (e.g. Render)
+            // without requiring APP_DEBUG or platform-specific log scraping of storage/logs.
+            'channels' => explode(',', (string) env('LOG_STACK', 'single,stderr')),
             'ignore_exceptions' => false,
         ],
 

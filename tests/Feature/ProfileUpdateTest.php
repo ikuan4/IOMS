@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -89,6 +90,38 @@ class ProfileUpdateTest extends TestCase
 
         $user->refresh();
         $this->assertTrue(Hash::check('new-password-123', $user->password));
+    }
+
+    public function test_profile_update_with_avatar_does_not_500_when_cloudinary_not_configured(): void
+    {
+        $role = Role::factory()->create();
+        $user = User::factory()->create(['role_id' => $role->id]);
+
+        // Force Cloudinary to be "not configured" (this would previously abort(500)).
+        config()->set('filesystems.disks.cloudinary', [
+            'driver' => 'cloudinary',
+            'url' => null,
+            'cloud' => null,
+            'key' => null,
+            'secret' => null,
+            'secure' => true,
+        ]);
+
+        $avatar = UploadedFile::fake()->image('avatar.jpg', 64, 64);
+
+        $this->actingAs($user)
+            ->put(route('profile.update'), [
+                'name' => 'Updated Name',
+                'mobile' => '1234567890',
+                'avatar' => $avatar,
+            ])
+            ->assertRedirect(route('profile.edit'))
+            ->assertSessionHas('status', 'Profile updated successfully.')
+            ->assertSessionHas('error', 'Profile photo upload failed (Cloudinary not configured or unreachable).');
+
+        $user->refresh();
+        $this->assertSame('Updated Name', $user->name);
+        $this->assertSame('1234567890', $user->mobile);
     }
 
     public function test_has_permission_fails_closed_when_permission_tables_missing(): void

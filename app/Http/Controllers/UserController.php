@@ -595,6 +595,8 @@ class UserController extends Controller
 
         $hasAvatarUpload = $avatarFile instanceof UploadedFile && $avatarFile->isValid();
 
+        $avatarFailureMessage = null;
+
         $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
         $user->name = $data['name'];
@@ -608,33 +610,44 @@ class UserController extends Controller
         // Cloudinary avatar upload / replacement (persistent storage).
         // Only execute when a file is actually uploaded.
         if ($hasAvatarUpload) {
-            $this->assertCloudinaryConfigured();
-            $targetPublicId = 'ioms/avatars/user_'.$user->id;
-            if ($user->avatar_public_id && $user->avatar_public_id !== $targetPublicId) {
-                Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
+            try {
+                $this->assertCloudinaryConfigured();
+                $targetPublicId = 'ioms/avatars/user_'.$user->id;
+                if ($user->avatar_public_id && $user->avatar_public_id !== $targetPublicId) {
+                    Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
+                }
+
+                /** @var array<string,mixed> $result */
+                $result = Cloudinary::uploadApi()->upload($avatarFile->getRealPath(), [
+                    'folder' => 'ioms/avatars',
+                    'public_id' => 'user_'.$user->id,
+                    'overwrite' => true,
+                    'resource_type' => 'image',
+                ]);
+
+                $user->avatar = null;
+                $user->avatar_url = $result['secure_url'] ?? $user->avatar_url;
+                $user->avatar_public_id = $result['public_id'] ?? $targetPublicId;
+            } catch (\Throwable $e) {
+                report($e);
+                // Do not crash the request; keep other profile updates.
+                $avatarFailureMessage = 'Profile photo upload failed (Cloudinary not configured or unreachable).';
             }
-
-            /** @var array<string,mixed> $result */
-            $result = Cloudinary::uploadApi()->upload($avatarFile->getRealPath(), [
-                'folder' => 'ioms/avatars',
-                'public_id' => 'user_'.$user->id,
-                'overwrite' => true,
-                'resource_type' => 'image',
-            ]);
-
-            $user->avatar = null;
-            $user->avatar_url = $result['secure_url'] ?? $user->avatar_url;
-            $user->avatar_public_id = $result['public_id'] ?? $targetPublicId;
         }
 
         // Cloudinary avatar removal.
         if ($request->boolean('remove_avatar', false) && $user->avatar_public_id) {
-            // Removal should delete the existing Cloudinary asset.
-            $this->assertCloudinaryConfigured();
-            Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
-            $user->avatar = null;
-            $user->avatar_url = null;
-            $user->avatar_public_id = null;
+            try {
+                // Removal should delete the existing Cloudinary asset.
+                $this->assertCloudinaryConfigured();
+                Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
+                $user->avatar = null;
+                $user->avatar_url = null;
+                $user->avatar_public_id = null;
+            } catch (\Throwable $e) {
+                report($e);
+                $avatarFailureMessage = 'Profile photo upload failed (Cloudinary not configured or unreachable).';
+            }
         }
 
         $user->updated_by = $user->id;
@@ -647,8 +660,14 @@ class UserController extends Controller
             $this->sanitizeUserAuditValues($user->fresh()?->toArray() ?? [])
         );
 
-        return redirect()->route('profile.edit')
+        $redirect = redirect()->route('profile.edit')
             ->with('status', 'Profile updated successfully.');
+
+        if ($avatarFailureMessage) {
+            $redirect->with('error', $avatarFailureMessage);
+        }
+
+        return $redirect;
     }
 
     /* -------------------------------------------------------------
