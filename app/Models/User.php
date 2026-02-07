@@ -272,7 +272,8 @@ class User extends Authenticatable
     {
         // Developer sees all active roles
         if ($this->isSuperAdmin()) {
-            $roles = Role::where('is_active', true)
+            $roles = Role::with(['branch' => fn($q) => $q->withTrashed()])
+                ->where('is_active', true)
                 ->whereNull('deleted_at')
                 ->orderBy('priority', 'asc')
                 ->get();
@@ -287,7 +288,8 @@ class User extends Authenticatable
 
         $myPriority = $effectiveRole->priority ?? 999;
 
-        $roles = Role::where('branch_id', $this->branch_id)
+                $roles = Role::with(['branch' => fn($q) => $q->withTrashed()])
+                    ->where('branch_id', $this->branch_id)
           ->where('is_active', true)
           ->whereNull('deleted_at')
           ->orderBy('priority', 'asc')

@@ -652,7 +652,15 @@
         function bindRoleSelectionHandlers() {
             const roleRows = document.querySelectorAll('.role-table-row');
             roleRows.forEach(row => {
-                row.addEventListener('click', function() {
+                row.addEventListener('click', function(e) {
+                    // If the user clicked a link/button/etc inside the row, do not run row-selection.
+                    // This prevents errors during SPA navigation when the index DOM is replaced.
+                    try {
+                        const target = e && e.target ? e.target : null;
+                        if (target && target.closest && target.closest('a, button, input, label, select, textarea, form')) {
+                            return;
+                        }
+                    } catch (err) {}
                     const roleId = this.dataset.roleId;
                     if (roleId) selectRole(roleId);
                 });
@@ -661,6 +669,11 @@
 
         function selectRole(roleId) {
                 const usersContainer = document.getElementById('users-by-role-container');
+
+                // If the index DOM was replaced (SPA navigation), fail gracefully.
+                if (!usersContainer) {
+                    return;
+                }
 
                 // Visually mark selected role row
                 document.querySelectorAll('.role-table-row').forEach(r => r.classList.remove('role-selected'));

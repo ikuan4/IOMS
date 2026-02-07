@@ -79,7 +79,15 @@
                     @if($isProtectedRole && !$currentIsSuperAdmin)
                         @continue
                     @endif
-                    <option value="{{ $role->id }}" {{ old('role_id', $user->role_id) == $role->id ? 'selected' : '' }}>{{ $role->name }}</option>
+                    @php
+                        $branchLabel = null;
+                        try {
+                            $branchLabel = $role->branch ? ($role->branch->name ?? null) : null;
+                        } catch (\Throwable $e) {
+                            $branchLabel = null;
+                        }
+                    @endphp
+                    <option value="{{ $role->id }}" {{ old('role_id', $user->role_id) == $role->id ? 'selected' : '' }}>{{ $role->name }}{{ $branchLabel ? ' - ' . $branchLabel : '' }}</option>
                 @endforeach
             </select>
             @error('role_id')<div style="color:#dc2626;font-size:13px;">{{ $message }}</div>@enderror
