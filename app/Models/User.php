@@ -222,8 +222,13 @@ class User extends Authenticatable
                 $slug = $aliases[$slug];
             }
 
-            if ($role->permissions()->where('slug', $slug)->exists()) {
-                return true;
+            try {
+                if ($role->permissions()->where('slug', $slug)->exists()) {
+                    return true;
+                }
+            } catch (\Throwable) {
+                // Fail closed if permission tables/pivots are missing or misconfigured.
+                return false;
             }
         }
 
@@ -236,7 +241,11 @@ class User extends Authenticatable
     public function getAllPermissions(): Collection
     {
         if ($this->isSuperAdmin()) {
-            return Permission::all();
+            try {
+                return Permission::all();
+            } catch (\Throwable) {
+                return new Collection();
+            }
         }
 
         $role = $this->effectiveRole();
@@ -244,7 +253,11 @@ class User extends Authenticatable
             return new Collection();
         }
 
-        return $role->permissions()->get();
+        try {
+            return $role->permissions()->get();
+        } catch (\Throwable) {
+            return new Collection();
+        }
     }
 
     /**

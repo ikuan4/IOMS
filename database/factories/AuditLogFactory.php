@@ -12,7 +12,7 @@ class AuditLogFactory extends Factory
     public function definition(): array
     {
         return [
-            'action' => fake()->sentence(),
+            'action' => $this->faker->sentence(),
         ];
     }
 }

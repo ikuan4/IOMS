@@ -86,6 +86,12 @@
                     </div>
 
                     <div>
+                        <label for="mobile" style="font-size:15px;font-weight:600;">Mobile</label><br>
+                        <input id="mobile" name="mobile" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="tel" value="{{ old('mobile', $user->mobile) }}" maxlength="20" placeholder="Enter mobile number" oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
+                        @error('mobile')<div style="color:#dc2626;font-size:13px;">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div>
                         <label for="email" style="font-size:15px;font-weight:600;">Email</label><br>
                         <input id="email" name="email" type="email" value="{{ old('email', $user->email) }}" autocomplete="email" style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
                         @error('email')<div style="color:#dc2626;font-size:13px;">{{ $message }}</div>@enderror

@@ -12,7 +12,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -21,19 +20,6 @@ use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 class UserController extends Controller
 {
     use AuthorizesRequests;
-
-    private function cloudinaryIsConfigured(): bool
-    {
-        $disk = (array) config('filesystems.disks.cloudinary', []);
-        $url = isset($disk['url']) ? (string) $disk['url'] : '';
-
-        if ($url !== '') {
-            // Expected: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
-            return (bool) preg_match('/^cloudinary:\/\/[^:\/]+:[^@\/]++@[^\/?#]+/i', $url);
-        }
-
-        return !empty($disk['cloud']) && !empty($disk['key']) && !empty($disk['secret']);
-    }
 
     private function assertCloudinaryConfigured(): void
     {
@@ -593,6 +579,7 @@ class UserController extends Controller
 
         $rules = [
             'name'     => ['required', 'string', 'max:255'],
+            'mobile'   => ['nullable', 'string', 'max:50', Rule::unique('users', 'mobile')->ignore($user->id)],
             // keep backward compatible: allow blank to preserve current value
             'email'    => ['nullable', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'confirmed', 'min:8'],
@@ -611,6 +598,7 @@ class UserController extends Controller
         $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
         $user->name = $data['name'];
+        $user->mobile = array_key_exists('mobile', $data) ? ($data['mobile'] ?: null) : $user->mobile;
         $user->email = $data['email'] ?? $user->email;
 
         if (!empty($data['password'])) {
@@ -620,84 +608,30 @@ class UserController extends Controller
         // Cloudinary avatar upload / replacement (persistent storage).
         // Only execute when a file is actually uploaded.
         if ($hasAvatarUpload) {
-            if ($this->cloudinaryIsConfigured()) {
-                try {
-                    $targetPublicId = 'ioms/avatars/user_'.$user->id;
-                    if ($user->avatar_public_id && $user->avatar_public_id !== $targetPublicId) {
-                        Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
-                    }
-
-                    /** @var array<string,mixed> $result */
-                    $result = Cloudinary::uploadApi()->upload($avatarFile->getRealPath(), [
-                        'folder' => 'ioms/avatars',
-                        'public_id' => 'user_'.$user->id,
-                        'overwrite' => true,
-                        'resource_type' => 'image',
-                    ]);
-
-                    $user->avatar = null;
-                    $user->avatar_url = $result['secure_url'] ?? $user->avatar_url;
-                    $user->avatar_public_id = $result['public_id'] ?? $targetPublicId;
-                } catch (\Throwable $e) {
-                    return back()
-                        ->withInput($request->except(['password', 'password_confirmation']))
-                        ->with('error', 'Profile photo upload failed (Cloudinary not configured or unreachable).');
-                }
-            } else {
-                // Local fallback (useful for local dev when Cloudinary env vars are not set).
-                // Stored under public/storage/avatars which is already present in this repo.
-                $dir = public_path('storage/avatars');
-                try {
-                    if (!File::exists($dir)) {
-                        File::makeDirectory($dir, 0755, true);
-                    }
-
-                    $ext = (string) ($avatarFile->guessExtension() ?: $avatarFile->getClientOriginalExtension() ?: 'jpg');
-                    $ext = strtolower(preg_replace('/[^a-z0-9]+/i', '', $ext) ?: 'jpg');
-                    $filename = 'user_'.$user->id.'.'.$ext;
-
-                    $avatarFile->move($dir, $filename);
-
-                    $user->avatar = null;
-                    $user->avatar_public_id = null;
-                    $user->avatar_url = asset('storage/avatars/'.$filename);
-                } catch (\Throwable $e) {
-                    return back()
-                        ->withInput($request->except(['password', 'password_confirmation']))
-                        ->with('error', 'Profile photo upload failed.');
-                }
+            $this->assertCloudinaryConfigured();
+            $targetPublicId = 'ioms/avatars/user_'.$user->id;
+            if ($user->avatar_public_id && $user->avatar_public_id !== $targetPublicId) {
+                Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
             }
+
+            /** @var array<string,mixed> $result */
+            $result = Cloudinary::uploadApi()->upload($avatarFile->getRealPath(), [
+                'folder' => 'ioms/avatars',
+                'public_id' => 'user_'.$user->id,
+                'overwrite' => true,
+                'resource_type' => 'image',
+            ]);
+
+            $user->avatar = null;
+            $user->avatar_url = $result['secure_url'] ?? $user->avatar_url;
+            $user->avatar_public_id = $result['public_id'] ?? $targetPublicId;
         }
 
         // Cloudinary avatar removal.
         if ($request->boolean('remove_avatar', false) && $user->avatar_public_id) {
             // Removal should delete the existing Cloudinary asset.
-            if ($this->cloudinaryIsConfigured()) {
-                try {
-                    Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
-                } catch (\Throwable $e) {
-                    // ignore (we still clear DB pointers below)
-                }
-            }
-            $user->avatar = null;
-            $user->avatar_url = null;
-            $user->avatar_public_id = null;
-        }
-
-        // Local avatar removal fallback (when Cloudinary isn't used).
-        if ($request->boolean('remove_avatar', false) && !$user->avatar_public_id && $user->avatar_url) {
-            try {
-                $path = parse_url((string) $user->avatar_url, PHP_URL_PATH);
-                if (is_string($path) && str_contains($path, '/storage/avatars/')) {
-                    $basename = basename($path);
-                    $full = public_path('storage/avatars/'.$basename);
-                    if (is_string($basename) && $basename !== '' && File::exists($full)) {
-                        File::delete($full);
-                    }
-                }
-            } catch (\Throwable $e) {
-                // ignore
-            }
+            $this->assertCloudinaryConfigured();
+            Cloudinary::uploadApi()->destroy($user->avatar_public_id, ['resource_type' => 'image']);
             $user->avatar = null;
             $user->avatar_url = null;
             $user->avatar_public_id = null;
