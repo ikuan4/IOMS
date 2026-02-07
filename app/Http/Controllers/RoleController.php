@@ -106,7 +106,7 @@ class RoleController extends Controller
         return AuditLog::where('user_id', $user->id)
             ->where('action', 'delete_role')
             ->where('auditable_type', Role::class)
-            ->where('auditable_id', 'IN', function ($q) use ($user) {
+            ->whereIn('auditable_id', function ($q) use ($user) {
                 $q->select('id')->from('roles')->where('branch_id', $user->branch_id);
             })
             ->pluck('auditable_id');
