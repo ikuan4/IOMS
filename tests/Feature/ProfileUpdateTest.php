@@ -107,7 +107,39 @@ class ProfileUpdateTest extends TestCase
             'secure' => true,
         ]);
 
-        $avatar = UploadedFile::fake()->image('avatar.jpg', 64, 64);
+        $avatar = UploadedFile::fake()->create('avatar.jpg', 20, 'image/jpeg');
+
+        $this->actingAs($user)
+            ->put(route('profile.update'), [
+                'name' => 'Updated Name',
+                'mobile' => '1234567890',
+                'avatar' => $avatar,
+            ])
+            ->assertRedirect(route('profile.edit'))
+            ->assertSessionHas('status', 'Profile updated successfully.')
+            ->assertSessionHas('error', 'Profile photo upload failed (Cloudinary not configured or unreachable).');
+
+        $user->refresh();
+        $this->assertSame('Updated Name', $user->name);
+        $this->assertSame('1234567890', $user->mobile);
+    }
+
+    public function test_profile_update_with_avatar_does_not_500_when_cloudinary_has_placeholder_api_key(): void
+    {
+        $role = Role::factory()->create();
+        $user = User::factory()->create(['role_id' => $role->id]);
+
+        // Matches the confirmed production failure mode: literal placeholder API key.
+        config()->set('filesystems.disks.cloudinary', [
+            'driver' => 'cloudinary',
+            'url' => null,
+            'cloud' => 'CLOUD_NAME',
+            'key' => 'API_KEY',
+            'secret' => 'API_SECRET',
+            'secure' => true,
+        ]);
+
+        $avatar = UploadedFile::fake()->create('avatar.jpg', 20, 'image/jpeg');
 
         $this->actingAs($user)
             ->put(route('profile.update'), [

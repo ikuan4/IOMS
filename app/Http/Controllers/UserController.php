@@ -27,17 +27,38 @@ class UserController extends Controller
         $hasUrl = !empty($disk['url']);
         $hasKeys = !empty($disk['cloud']) && !empty($disk['key']) && !empty($disk['secret']);
 
+        $placeholderValues = [
+            'API_KEY',
+            'API_SECRET',
+            'CLOUD_NAME',
+            'CLOUDINARY_API_KEY',
+            'CLOUDINARY_API_SECRET',
+            'CLOUDINARY_CLOUD_NAME',
+        ];
+
         if ($hasUrl) {
             $url = (string) $disk['url'];
             // Expected: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+            foreach ($placeholderValues as $placeholder) {
+                if ($placeholder !== '' && str_contains($url, $placeholder)) {
+                    throw new \RuntimeException('Cloudinary is misconfigured. Placeholder credentials detected in CLOUDINARY_URL.');
+                }
+            }
             if (!preg_match('/^cloudinary:\/\/[^:\/]+:[^@\/]++@[^\/?#]+/i', $url)) {
-                abort(500, 'Cloudinary is misconfigured. CLOUDINARY_URL must look like cloudinary://API_KEY:API_SECRET@CLOUD_NAME.');
+                throw new \RuntimeException('Cloudinary is misconfigured. CLOUDINARY_URL must look like cloudinary://API_KEY:API_SECRET@CLOUD_NAME.');
             }
             return;
         }
 
         if (! $hasKeys) {
-            abort(500, 'Cloudinary is not configured. Set CLOUDINARY_URL or CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET.');
+            throw new \RuntimeException('Cloudinary is not configured. Set CLOUDINARY_URL or CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET.');
+        }
+
+        $cloud = (string) ($disk['cloud'] ?? '');
+        $key = (string) ($disk['key'] ?? '');
+        $secret = (string) ($disk['secret'] ?? '');
+        if (in_array($cloud, $placeholderValues, true) || in_array($key, $placeholderValues, true) || in_array($secret, $placeholderValues, true)) {
+            throw new \RuntimeException('Cloudinary is misconfigured. Placeholder credentials detected in CLOUDINARY_* environment variables.');
         }
     }
 
@@ -628,7 +649,7 @@ class UserController extends Controller
                 $user->avatar = null;
                 $user->avatar_url = $result['secure_url'] ?? $user->avatar_url;
                 $user->avatar_public_id = $result['public_id'] ?? $targetPublicId;
-            } catch (\Throwable $e) {
+            } catch (\RuntimeException|\Cloudinary\Api\Exception\ApiError|\GuzzleHttp\Exception\GuzzleException $e) {
                 report($e);
                 // Do not crash the request; keep other profile updates.
                 $avatarFailureMessage = 'Profile photo upload failed (Cloudinary not configured or unreachable).';
@@ -644,7 +665,7 @@ class UserController extends Controller
                 $user->avatar = null;
                 $user->avatar_url = null;
                 $user->avatar_public_id = null;
-            } catch (\Throwable $e) {
+            } catch (\RuntimeException|\Cloudinary\Api\Exception\ApiError|\GuzzleHttp\Exception\GuzzleException $e) {
                 report($e);
                 $avatarFailureMessage = 'Profile photo upload failed (Cloudinary not configured or unreachable).';
             }

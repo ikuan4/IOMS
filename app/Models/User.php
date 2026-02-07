@@ -23,10 +23,12 @@ use App\Models\Branch;
  * @property string|null $avatar_public_id
  * @property string $name
  * @property string|null $email
+ * @property string|null $mobile
  * @property string $password
  * @property int|null $role_id
  * @property int|null $branch_id
  * @property bool $active
+ * @property \Illuminate\Support\Carbon|null $mobile_verified_at
  * @property \Illuminate\Database\Eloquent\Collection|Permission[] $permissions
  * @property \Illuminate\Database\Eloquent\Collection|Role[] $roles
  * @property int|null $created_by
