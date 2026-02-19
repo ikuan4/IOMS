@@ -241,13 +241,13 @@
                     $selectedRecipientIds = $contract->notificationRecipients->pluck('id')->toArray();
                 @endphp
                 @forelse($recipients as $recipient)
-                    <label style="display:flex;align-items:center;gap:10px;padding:12px;background:#f9fafb;border-radius:8px;cursor:pointer;">
+                    <label style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg);border-radius:8px;cursor:pointer;">
                         <input type="checkbox" name="recipient_ids[]" value="{{ $recipient->id }}"
                             {{ in_array($recipient->id, old('recipient_ids', $selectedRecipientIds)) ? 'checked' : '' }}
                             style="width:18px;height:18px;">
                         <div>
                             <div style="font-weight:600;font-size:14px;">{{ $recipient->name }}</div>
-                            <div style="font-size:12px;color:#6b7280;">{{ $recipient->email }}</div>
+                            <div class="muted" style="font-size:12px;">{{ $recipient->email }}</div>
                         </div>
                     </label>
                 @empty

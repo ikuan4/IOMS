@@ -60,6 +60,7 @@ class ContractsSeeder extends Seeder
     {
         $this->command->info('Creating contract types, contracts, and notification recipients...');
 
+        /** @var \Illuminate\Database\Eloquent\Collection<int, Branch> $branches */
         $branches = Branch::where('name', '!=', 'Main Branch')
             ->whereNotNull('id')
             ->get();
@@ -70,6 +71,7 @@ class ContractsSeeder extends Seeder
         }
 
         foreach ($branches as $branch) {
+            /** @var Branch $branch */
             // Ensure branch has an ID
             if (!$branch->id) {
                 $this->command->warn("Branch {$branch->name} has no ID. Skipping...");
@@ -94,6 +96,9 @@ class ContractsSeeder extends Seeder
 
             // Step 3: Create contracts for each contract type (5-8 per type)
             $this->createContractsForTypes($branch, $contractTypes, $branchUsers);
+
+            // Step 4: Assign 1-3 random notification recipients to each contract
+            $this->assignRecipientsToContracts($branch);
         }
 
         $this->command->info('Contract seeding completed!');
@@ -161,14 +166,18 @@ class ContractsSeeder extends Seeder
 
             $usedCodes[] = $code;
 
-            $contractType = ContractType::create([
-                'branch_id' => $branch->id,
-                'name' => $typeName,
-                'description' => $typeName . ' for ' . $branch->name,
-                'code' => $code,
-                'is_active' => true,
-                'created_by' => $creator->id,
-            ]);
+            $contractType = ContractType::firstOrCreate(
+                [
+                    'branch_id' => $branch->id,
+                    'name' => $typeName,
+                ],
+                [
+                    'description' => $typeName . ' for ' . $branch->name,
+                    'code' => $code,
+                    'is_active' => true,
+                    'created_by' => $creator->id,
+                ]
+            );
 
             $contractTypes[] = $contractType;
         }
@@ -192,7 +201,7 @@ class ContractsSeeder extends Seeder
                 $companyName = $this->companyNames[array_rand($this->companyNames)];
 
                 // Generate contract number: CT-{BRANCH_ID}/{TYPE_CODE}/{YYYY}/{sequential}
-                $year = now()->year;
+                $year = Carbon::now()->year;
                 $sequential = str_pad($i + 1, 4, '0', STR_PAD_LEFT);
                 $contractNumber = "CT-{$branch->id}/{$contractType->code}/{$year}/{$sequential}";
 
@@ -217,6 +226,31 @@ class ContractsSeeder extends Seeder
         }
 
         $this->command->info("  ✓ Created {$totalContracts} contracts with versions");
+    }
+
+    /**
+     * Assign 1-3 random notification recipients to each contract in the branch.
+     */
+    private function assignRecipientsToContracts(Branch $branch): void
+    {
+        $recipients = NotificationRecipient::where('branch_id', $branch->id)->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $contracts = Contract::where('branch_id', $branch->id)->get();
+
+        foreach ($contracts as $contract) {
+            $numberOfRecipients = rand(1, 3);
+            $randomRecipients = $recipients->shuffle()->take($numberOfRecipients);
+
+            foreach ($randomRecipients as $recipient) {
+                $contract->notificationRecipients()->syncWithoutDetaching($recipient->id);
+            }
+        }
+
+        $this->command->info("  ✓ Assigned notification recipients to {$branch->name} contracts");
     }
 
     /**

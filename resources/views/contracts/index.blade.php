@@ -164,6 +164,7 @@
                         @foreach ($contracts as $contract)
                             @php
                                 $latestVersion = $contract->latestVersion;
+                                $canViewContract = auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.view');
                                 $statusColors = [
                                     'Ongoing' => ['bg' => '#d1fae5', 'text' => '#065f46'],
                                     'Pending' => ['bg' => '#fef3c7', 'text' => '#92400e'],
@@ -175,7 +176,11 @@
                             @endphp
                             <tr style="border-bottom:1px solid #e5e7eb;">
                                 <td style="padding:14px 20px;">
-                                    <span style="font-size:15px;font-weight:600;color:#0B6BBD;">{{ $contract->contract_number }}</span>
+                                    @if($canViewContract)
+                                        <a href="{{ route('contracts.show', $contract->id) }}" style="font-size:15px;font-weight:600;color:#0B6BBD;text-decoration:none;">{{ $contract->contract_number }}</a>
+                                    @else
+                                        <span style="font-size:15px;font-weight:600;color:var(--text,#111827);">{{ $contract->contract_number }}</span>
+                                    @endif
                                 </td>
                                 <td style="padding:14px 20px;font-size:14px;">{{ optional($contract->contractType)->name ?? 'N/A' }}</td>
                                 <td style="padding:14px 20px;font-size:14px;font-weight:500;">{{ $contract->contract_with }}</td>
@@ -196,7 +201,7 @@
                                 </td>
                                 <td style="padding:14px 20px;text-align:center;">
                                     <div style="display:flex;gap:8px;justify-content:center;">
-                                        @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.view'))
+                                        @if($canViewContract)
                                             <a href="{{ route('contracts.show', $contract->id) }}" style="background:#f3f4f6;color:#374151;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;margin-right:6px;text-decoration:none;" title="View contract"><span data-feather="eye"></span></a>
                                         @endif
                                         @if(auth()->user()->isSuperAdmin() || auth()->user()->hasPermission('contracts.edit'))

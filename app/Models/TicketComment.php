@@ -57,9 +57,15 @@ class TicketComment extends Model
         return self::$cachedBodyColumn;
     }
 
-    public function getBodyAttribute(): ?string
+    public function getBodyAttribute($value): ?string
     {
-        return $this->getAttribute(self::bodyColumn());
+        $col = self::bodyColumn();
+
+        if ($col === 'body') {
+            return $value;
+        }
+
+        return $this->attributes[$col] ?? $value;
     }
 
     public function setBodyAttribute(?string $value): void

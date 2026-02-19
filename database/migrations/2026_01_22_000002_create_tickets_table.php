@@ -28,6 +28,11 @@ return new class extends Migration
                 ->cascadeOnUpdate()
                 ->restrictOnDelete();
 
+            $table->foreignId('ticket_module_id')
+                ->constrained('ticket_modules')
+                ->cascadeOnUpdate()
+                ->restrictOnDelete();
+
             $table->string('subject');
             $table->text('description')->nullable();
 
@@ -61,6 +66,7 @@ return new class extends Migration
             $table->timestamp('restored_at')->nullable();
 
             $table->index(['branch_id', 'ticket_type_id']);
+            $table->index(['branch_id', 'ticket_module_id']);
             $table->index(['branch_id', 'status']);
             $table->index(['branch_id', 'priority']);
         });

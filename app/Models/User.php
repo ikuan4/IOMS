@@ -353,7 +353,10 @@ class User extends Authenticatable
      */
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'created_by');
+        return $this->belongsTo(self::class, 'created_by')
+            ->withoutGlobalScopes()
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy'])
+            ->select(['id', 'name', 'email']);
     }
 
     // BelongsTo relation updatedBy
@@ -362,7 +365,10 @@ class User extends Authenticatable
      */
     public function updatedBy(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'updated_by');
+        return $this->belongsTo(self::class, 'updated_by')
+            ->withoutGlobalScopes()
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy'])
+            ->select(['id', 'name', 'email']);
     }
 
     // BelongsTo relation lastUpdatedBy
@@ -371,7 +377,10 @@ class User extends Authenticatable
      */
     public function lastUpdatedBy(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'last_updated_by');
+        return $this->belongsTo(self::class, 'last_updated_by')
+            ->withoutGlobalScopes()
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy'])
+            ->select(['id', 'name', 'email']);
     }
 
     // BelongsTo relation deletedBy
@@ -380,7 +389,10 @@ class User extends Authenticatable
      */
     public function deletedBy(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'deleted_by');
+        return $this->belongsTo(self::class, 'deleted_by')
+            ->withoutGlobalScopes()
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy'])
+            ->select(['id', 'name', 'email']);
     }
 
     // BelongsTo relation restoredBy
@@ -389,7 +401,10 @@ class User extends Authenticatable
      */
     public function restoredBy(): BelongsTo
     {
-        return $this->belongsTo(self::class, 'restored_by');
+        return $this->belongsTo(self::class, 'restored_by')
+            ->withoutGlobalScopes()
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy'])
+            ->select(['id', 'name', 'email']);
     }
 
     /**

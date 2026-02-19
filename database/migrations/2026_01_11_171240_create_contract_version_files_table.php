@@ -27,7 +27,26 @@ return new class extends Migration
             // Display order for attachments (Attachment 1, 2, 3...)
             $table->unsignedInteger('display_order')->default(1);
 
+            // Audit fields
+            $table->foreignId('created_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('updated_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('deleted_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('restored_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
             $table->timestamps();
+            $table->softDeletes();
+            $table->timestamp('restored_at')->nullable();
 
             $table->index(['contract_version_id', 'display_order']);
         });

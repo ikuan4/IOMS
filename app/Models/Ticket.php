@@ -71,7 +71,6 @@ class Ticket extends Model
         'branch_id' => 'integer',
         'ticket_type_id' => 'integer',
         'ticket_module_id' => 'integer',
-        'assigned_to' => 'integer',
         'assignee_id' => 'integer',
         'reporter_id' => 'integer',
         'due_at' => 'datetime',
@@ -154,10 +153,15 @@ class Ticket extends Model
         return 'TKT-' . now()->format('Ymd') . '-' . Str::upper(Str::random(6));
     }
 
-    public function getSubjectAttribute(): ?string
+    public function getSubjectAttribute($value): ?string
     {
         $col = self::subjectColumn();
-        return $this->getAttribute($col);
+
+        if ($col === 'subject') {
+            return $value;
+        }
+
+        return $this->attributes[$col] ?? $value;
     }
 
     public function setSubjectAttribute(?string $value): void
@@ -166,11 +170,15 @@ class Ticket extends Model
         $this->attributes[$col] = $value;
     }
 
-    public function getAssignedToAttribute(): ?int
+    public function getAssignedToAttribute($value): ?int
     {
         $col = self::assigneeForeignKey();
-        $val = $this->getAttribute($col);
-        return $val === null ? null : (int) $val;
+
+        $raw = $col === 'assigned_to'
+            ? $value
+            : ($this->attributes[$col] ?? null);
+
+        return $raw === null ? null : (int) $raw;
     }
 
     public function setAssignedToAttribute(int|string|null $value): void
@@ -179,10 +187,15 @@ class Ticket extends Model
         $this->attributes[$col] = $value === '' ? null : $value;
     }
 
-    public function getDueAtAttribute(): mixed
+    public function getDueAtAttribute($value): mixed
     {
         $col = self::dueAtColumn();
-        return $this->getAttribute($col);
+
+        $raw = $col === 'due_at'
+            ? $value
+            : ($this->attributes[$col] ?? null);
+
+        return $raw === null ? null : $this->asDateTime($raw);
     }
 
     public function setDueAtAttribute(mixed $value): void

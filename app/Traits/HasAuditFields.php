@@ -99,7 +99,9 @@ trait HasAuditFields
      */
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\User::class, 'created_by');
+        return $this->belongsTo(\App\Models\User::class, 'created_by')
+            ->select(['id', 'name', 'email'])
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy']);
     }
 
     /**
@@ -109,7 +111,9 @@ trait HasAuditFields
      */
     public function updatedBy(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\User::class, 'updated_by');
+        return $this->belongsTo(\App\Models\User::class, 'updated_by')
+            ->select(['id', 'name', 'email'])
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy']);
     }
 
     /**
@@ -119,7 +123,9 @@ trait HasAuditFields
      */
     public function deletedBy(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\User::class, 'deleted_by');
+        return $this->belongsTo(\App\Models\User::class, 'deleted_by')
+            ->select(['id', 'name', 'email'])
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy']);
     }
 
     /**
@@ -129,7 +135,9 @@ trait HasAuditFields
      */
     public function restoredBy(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\User::class, 'restored_by');
+        return $this->belongsTo(\App\Models\User::class, 'restored_by')
+            ->select(['id', 'name', 'email'])
+            ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy']);
     }
 
     /**

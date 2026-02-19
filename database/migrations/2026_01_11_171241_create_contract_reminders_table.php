@@ -26,7 +26,26 @@ return new class extends Migration
             $table->boolean('is_sent')->default(false);
             $table->dateTime('sent_at')->nullable();
 
+            // Audit fields
+            $table->foreignId('created_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('updated_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('deleted_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('restored_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
             $table->timestamps();
+            $table->softDeletes();
+            $table->timestamp('restored_at')->nullable();
         });
     }
 

@@ -36,7 +36,26 @@ return new class extends Migration
             // SHA-256 for deduplication within branch
             $table->string('sha256', 64);
 
+            // Audit fields
+            $table->foreignId('created_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('updated_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('deleted_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
+            $table->foreignId('restored_by')->nullable()
+                ->constrained('users')
+                ->nullOnDelete();
+
             $table->timestamps();
+            $table->softDeletes();
+            $table->timestamp('restored_at')->nullable();
 
             // Unique SHA-256 per branch (allow same file in different branches)
             $table->unique(['branch_id', 'sha256']);

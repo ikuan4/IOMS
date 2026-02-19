@@ -395,7 +395,18 @@ class TicketController extends Controller
         }
 
         $query = Ticket::withTrashed()
-            ->with(['ticketType', 'ticketModule', 'assignee', 'branch'])
+            ->with([
+                'ticketType', 
+                'ticketModule',
+                'assignee' => function ($q) {
+                    $q->select(['id', 'name', 'email'])
+                      ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy']);
+                },
+                'branch' => function ($q) {
+                    $q->select(['id', 'name'])
+                      ->without(['createdBy', 'updatedBy', 'deletedBy', 'restoredBy', 'lastUpdatedBy']);
+                }
+            ])
             ->when(!$user->isSuperAdmin(), function ($q) use ($user) {
                 $q->where('branch_id', $user->branch_id);
             })
