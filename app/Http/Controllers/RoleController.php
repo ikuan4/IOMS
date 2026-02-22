@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use Schema;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Contracts\View\View as ContractView;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -78,11 +78,17 @@ class RoleController extends Controller
             return $query;
         }
 
-        // Non-admin: restrict to own branch
-        $query->where('branch_id', $user->branch_id);
+        // Branch users: restrict to roles in active branch
+        $activeBranchId = session('active_branch_id');
+        if ($activeBranchId) {
+            $query->where(function($q) use ($activeBranchId) {
+                $q->where('branch_id', $activeBranchId)
+                  ->orWhere('is_global', false); // Also show branch roles without specific branch
+            });
+        }
 
-        $manageableRoleIds = $user->getManageableRoles()->pluck('id')->push($user->role_id);
-        $userDeletedRoleIds = $this->getUserDeletedRoleIds($user);
+        $manageableRoleIds = $user->getManageableRoles()->pluck('id');
+        $userDeletedRoleIds = $this->getUserDeletedRoleIds($user, $activeBranchId);
 
         $query->where(function ($q) use ($manageableRoleIds, $userDeletedRoleIds) {
             $q->whereIn('id', $manageableRoleIds)
@@ -99,17 +105,22 @@ class RoleController extends Controller
      * Get deleted role IDs that the user deleted.
      *
      * @param User $user
+     * @param int|null $activeBranchId
      * @return \Illuminate\Support\Collection<int, int>
      */
-    private function getUserDeletedRoleIds(User $user): Collection
+    private function getUserDeletedRoleIds(User $user, ?int $activeBranchId = null): Collection
     {
-        return AuditLog::where('user_id', $user->id)
+        $query = AuditLog::where('user_id', $user->id)
             ->where('action', 'delete_role')
-            ->where('auditable_type', Role::class)
-            ->where('auditable_id', 'IN', function ($q) use ($user) {
-                $q->select('id')->from('roles')->where('branch_id', $user->branch_id);
-            })
-            ->pluck('auditable_id');
+            ->where('auditable_type', Role::class);
+
+        if ($activeBranchId) {
+            $query->where('auditable_id', 'IN', function ($q) use ($activeBranchId) {
+                $q->select('id')->from('roles')->where('branch_id', $activeBranchId);
+            });
+        }
+
+        return $query->pluck('auditable_id');
     }
 
     /**
@@ -182,20 +193,27 @@ class RoleController extends Controller
 
         $this->authorize('view', $role);
 
-        $users = User::where('role_id', $role->id)
-            ->with(['role' => fn($q) => $q->withTrashed()])
-            ->get();
+        // Get users who have this role either as global role or branch role
+        $users = User::where(function($q) use ($role) {
+            $q->where('global_role_id', $role->id)
+              ->orWhereHas('branchRoles', function($branchRoleQuery) use ($role) {
+                  $branchRoleQuery->where('role_id', $role->id);
+              });
+        })
+        ->with(['globalRole' => fn($q) => $q->withTrashed(), 'branchRoles' => fn($q) => $q->withTrashed()])
+        ->get();
 
-        $mapped = $users->map(function ($u) {
+        $mapped = $users->map(function ($u) use ($role) {
+            $userRole = $u->global_role_id == $role->id ? $u->globalRole : $role;
             return [
                 'id' => $u->id,
                 'name' => $u->name,
                 'email' => $u->email,
                 'active' => (bool) ($u->active ?? false),
-                'role' => $u->role ? [
-                    'id' => $u->role->id,
-                    'name' => $u->role->name,
-                    'slug' => $u->role->slug
+                'role' => $userRole ? [
+                    'id' => $userRole->id,
+                    'name' => $userRole->name,
+                    'slug' => $userRole->slug
                 ] : null,
             ];
         })->values();

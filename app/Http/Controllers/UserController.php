@@ -20,37 +20,6 @@ class UserController extends Controller
 {
     use AuthorizesRequests;
 
-    /* -------------------------------------------------------------
-     | Helpers (centralized role safety)
-     |-------------------------------------------------------------*/
-    private function roleName(mixed $role): ?string
-    {
-        if ($role instanceof Role) {
-            return $role->name ?? $role->role_name ?? null;
-        }
-
-        if ($role instanceof \Illuminate\Database\Eloquent\Collection && $role->isNotEmpty()) {
-            $r = $role->first();
-            return $r->name ?? $r->role_name ?? null;
-        }
-
-        return null;
-    }
-
-    private function roleIsActive(mixed $role): bool
-    {
-        if ($role instanceof Role) {
-            return (bool) ($role->is_active ?? $role->active ?? false);
-        }
-
-        if ($role instanceof \Illuminate\Database\Eloquent\Collection) {
-            $r = $role->first();
-            return $r ? $this->roleIsActive($r) : false;
-        }
-
-        return false;
-    }
-
     /**
      * Remove sensitive fields from audit payloads.
      *
@@ -80,22 +49,31 @@ class UserController extends Controller
         $perPage = (int) $request->query('per_page', 10);
 
         $query = User::with([
-            'role' => function($q) { $q->withTrashed(); },
-            'branch' => function($q) { $q->withTrashed(); }
+            'globalRole' => function($q) { $q->withTrashed(); },
+            'branchRoles' => function($q) { $q->withTrashed(); },
+            'branches' => function($q) { $q->withTrashed(); }
         ])->withTrashed();
 
         // Enforce hierarchy: users can only see users with lower hierarchy (higher priority number)
         if (!$currentUser->isSuperAdmin()) {
             $effectiveRole = $currentUser->effectiveRole();
             $myPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
+            $activeBranchId = session('active_branch_id');
 
-            $query->where('branch_id', $currentUser->branch_id)
-                ->where(function($q) use ($myPriority) {
-                    $q->whereHas('role', function($roleQuery) use ($myPriority) {
-                        $roleQuery->where('priority', '>', $myPriority);
-                    })
-                    ->orWhereNull('role_id'); // Include users without roles
+            // Branch users can only see users in their active branch
+            if ($activeBranchId) {
+                $query->where(function($q) use ($activeBranchId, $myPriority) {
+                    // Users who have a role in the active branch
+                    $q->whereHas('branches', function($branchQuery) use ($activeBranchId) {
+                        $branchQuery->where('branch_id', $activeBranchId);
+                    })->where(function($roleQuery) use ($myPriority) {
+                        // Check priority via branchRoles relationship
+                        $roleQuery->whereHas('branchRoles', function($brQuery) use ($myPriority) {
+                            $brQuery->where('priority', '>', $myPriority);
+                        });
+                    });
                 });
+            }
         }
 
         if ($search !== '') {
@@ -111,7 +89,7 @@ class UserController extends Controller
         } elseif ($status === 'deactivated') {
             $query->where('active', false)->whereNull('deleted_at');
         } elseif ($status === 'deleted') {
-            $query = User::onlyTrashed()->with(['role', 'branch']);
+            $query = User::onlyTrashed()->with(['globalRole', 'branchRoles', 'branches']);
         }
 
         $users = $query->paginate($perPage)->withQueryString();
@@ -121,13 +99,19 @@ class UserController extends Controller
         if (!$currentUser->isSuperAdmin()) {
             $effectiveRole = $currentUser->effectiveRole();
             $myPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
-            $baseCountQuery->where('branch_id', $currentUser->branch_id)
-                ->where(function($q) use ($myPriority) {
-                    $q->whereHas('role', function($roleQuery) use ($myPriority) {
-                        $roleQuery->where('priority', '>', $myPriority);
-                    })
-                    ->orWhereNull('role_id');
+            $activeBranchId = session('active_branch_id');
+            
+            if ($activeBranchId) {
+                $baseCountQuery->where(function($q) use ($activeBranchId, $myPriority) {
+                    $q->whereHas('branches', function($branchQuery) use ($activeBranchId) {
+                        $branchQuery->where('branch_id', $activeBranchId);
+                    })->where(function($roleQuery) use ($myPriority) {
+                        $roleQuery->whereHas('branchRoles', function($brQuery) use ($myPriority) {
+                            $brQuery->where('priority', '>', $myPriority);
+                        });
+                    });
                 });
+            }
         }
 
         $statusCounts = [
@@ -156,11 +140,11 @@ class UserController extends Controller
     {
         $this->authorize('view', $user);
 
-        $user->load(['role' => function($q) {
-            $q->withTrashed();
-        }, 'branch' => function($q) {
-            $q->withTrashed();
-        }]);
+        $user->load([
+            'globalRole' => function($q) { $q->withTrashed(); },
+            'branchRoles' => function($q) { $q->withTrashed(); },
+            'branches' => function($q) { $q->withTrashed(); }
+        ]);
 
         return view('users.show', compact('user'));
     }
@@ -201,61 +185,102 @@ class UserController extends Controller
         }
 
         $data = $request->validate([
-            'name'      => ['required', 'string', 'max:255'],
-            'mobile'    => ['required', 'string', 'max:50', 'unique:users,mobile'],
-            'email'     => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password'  => ['required', 'string', 'min:8', 'confirmed'],
-            'avatar'    => ['nullable', 'image', 'max:2048'],
-            'role_id'   => ['required', 'exists:roles,id'],
-            'branch_id' => ['nullable', 'exists:branches,id'],
-            'active'    => ['nullable', 'boolean'],
+            'name'           => ['required', 'string', 'max:255'],
+            'mobile'         => ['required', 'string', 'max:50', 'unique:users,mobile'],
+            'email'          => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password'       => ['required', 'string', 'min:8', 'confirmed'],
+            'avatar'         => ['nullable', 'image', 'max:2048'],
+            'global_role_id' => ['nullable', 'exists:roles,id'],
+            'branch_ids'     => ['nullable', 'array'],
+            'branch_ids.*'   => ['exists:branches,id'],
+            'role_ids'       => ['nullable', 'array'],
+            'role_ids.*'     => ['exists:roles,id'],
+            'active'         => ['nullable', 'boolean'],
         ]);
 
-        // Prevent creation of developer-like users (null role_id and null branch_id)
-        // Only the seeder or direct database operation should create the developer user
-        if ($data['role_id'] === null) {
-            return back()->withInput()->with('error', 'Cannot create user without a role. Developer user must be created via seeder only.');
-        }
-
-        $role = Role::withTrashed()->find($data['role_id']);
-
-        // Prevent assigning a role that belongs to a different branch than provided
-        $requestedBranchId = $request->input('branch_id') ?? null;
         $currentUser = Auth::user();
 
         if (!$currentUser) {
             abort(403);
         }
 
-        if ($requestedBranchId !== null && $role instanceof Role) {
-            if (!$currentUser->isSuperAdmin() && $role->branch_id !== null && $role->branch_id != $requestedBranchId) {
-                return back()->withInput()->with('error', 'Selected role belongs to a different branch.');
+        // Validate: must have either global_role_id OR (branch_ids + role_ids)
+        if (!$request->filled('global_role_id') && (!$request->filled('branch_ids') || !$request->filled('role_ids'))) {
+            return back()->withInput()->with('error', 'User must have either a global role OR branch assignments with roles.');
+        }
+
+        // Validate: cannot have both global_role_id AND branch assignments
+        if ($request->filled('global_role_id') && ($request->filled('branch_ids') || $request->filled('role_ids'))) {
+            return back()->withInput()->with('error', 'User cannot have both a global role and branch-specific roles.');
+        }
+
+        // If global role, validate it's actually global
+        if ($request->filled('global_role_id')) {
+            $globalRole = Role::withTrashed()->find($data['global_role_id']);
+            if (!$globalRole || !$globalRole->is_global) {
+                return back()->withInput()->with('error', 'Selected role is not a global role.');
+            }
+
+            // Only superadmin can assign global roles
+            if (!$currentUser->isSuperAdmin()) {
+                return back()->withInput()->with('error', 'Only superadmins can assign global roles.');
+            }
+
+            // Check role status
+            if ($request->boolean('active', true) && ($globalRole->trashed() || !($globalRole->is_active ?? false))) {
+                return back()->withInput()->with('error', 'Cannot activate user because the selected role is inactive or deleted.');
             }
         }
 
-        // Strict validation: user branch must match role branch (unless role has no branch)
-        if (!$currentUser->isSuperAdmin() && $role instanceof Role && $role->branch_id !== null && $requestedBranchId !== null) {
-            if ($role->branch_id != $requestedBranchId) {
-                return back()->withInput()->with('error', 'User branch must match role branch.');
+        // If branch roles, validate branch count matches role count
+        if ($request->filled('branch_ids') && $request->filled('role_ids')) {
+            $branchIds = $data['branch_ids'] ?? [];
+            $roleIds = $data['role_ids'] ?? [];
+
+            if (count($branchIds) !== count($roleIds)) {
+                return back()->withInput()->with('error', 'Number of branches must match number of roles.');
+            }
+
+            // Validate all roles are branch roles
+            /** @var \Illuminate\Database\Eloquent\Collection<int, Role> $roles */
+            $roles = Role::withTrashed()->whereIn('id', $roleIds)->get();
+            foreach ($roles as $role) {
+                /** @var Role $role */
+                if ($role->is_global) {
+                    return back()->withInput()->with('error', 'Cannot assign global role as branch role.');
+                }
+
+                // Branch users can only assign roles in their active branch
+                if (!$currentUser->isSuperAdmin()) {
+                    $activeBranchId = session('active_branch_id');
+                    if (!in_array($activeBranchId, $branchIds, true)) {
+                        return back()->withInput()->with('error', 'You can only assign users to your active branch.');
+                    }
+
+                    // Check if role belongs to the paired branch
+                    $roleIndex = array_search($role->id, $roleIds);
+                    $pairedBranchId = $branchIds[$roleIndex] ?? null;
+
+                    if ($role->branch_id && $role->branch_id != $pairedBranchId) {
+                        return back()->withInput()->with('error', 'Role must belong to the assigned branch.');
+                    }
+                }
+
+                // Check role status
+                if ($request->boolean('active', true) && ($role->trashed() || !($role->is_active ?? false))) {
+                    return back()->withInput()->with('error', 'Cannot activate user because one of the selected roles is inactive or deleted.');
+                }
             }
         }
 
-        // Use transaction with role status re-check to prevent race conditions
-        return DB::transaction(function () use ($request, $data, $role, $actorIdInt) {
-            // Re-check role status inside transaction
-            $role = Role::withTrashed()->lockForUpdate()->find($data['role_id']);
-
-            if ($request->boolean('active', true)) {
-                if ($role instanceof Role && ($role->trashed() || ! $this->roleIsActive($role))) {
-                    return back()->withInput()->with('error', 'Cannot activate user because the selected role is inactive or deleted.');
-                }
-                }
-
+        // Use transaction
+        return DB::transaction(function () use ($request, $data, $actorIdInt) {
             $user = new User();
             $user->fill($data);
             $user->password   = Hash::make($data['password']);
             $user->active     = $request->boolean('active', true);
             $user->created_by = $actorIdInt;
+            $user->global_role_id = $data['global_role_id'] ?? null;
 
             if ($request->hasFile('avatar')) {
                 $path = $request->file('avatar')->store('avatars', 'public');
@@ -264,8 +289,32 @@ class UserController extends Controller
                 }
             }
 
-            $user->branch_id = $request->input('branch_id') ?? $role->branch_id ?? null;
             $user->save();
+
+            // Handle branch role assignments
+            if (!$user->global_role_id && $request->filled('branch_ids') && $request->filled('role_ids')) {
+                $branchIds = $data['branch_ids'] ?? [];
+                $roleIds = $data['role_ids'] ?? [];
+
+                for ($i = 0; $i < count($branchIds); $i++) {
+                    // Insert into branch_user
+                    DB::table('branch_user')->insert([
+                        'user_id' => $user->id,
+                        'branch_id' => $branchIds[$i],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    // Insert into branch_user_role
+                    DB::table('branch_user_role')->insert([
+                        'user_id' => $user->id,
+                        'branch_id' => $branchIds[$i],
+                        'role_id' => $roleIds[$i],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
 
             AuditLog::log(
                 'create_user',
@@ -312,88 +361,104 @@ class UserController extends Controller
         }
 
         $data = $request->validate([
-            'name'     => ['required', 'string', 'max:255'],
-            'mobile'   => ['required', Rule::unique('users')->ignore($user->id)],
-            'email'    => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'password' => ['nullable', 'confirmed', 'min:8'],
-            'role_id'  => ['required', 'exists:roles,id'],
-            'branch_id'=> ['nullable', 'exists:branches,id'],
-            'active'   => ['nullable', 'boolean'],
+            'name'           => ['required', 'string', 'max:255'],
+            'mobile'         => ['required', Rule::unique('users')->ignore($user->id)],
+            'email'          => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
+            'password'       => ['nullable', 'confirmed', 'min:8'],
+            'global_role_id' => ['nullable', 'exists:roles,id'],
+            'branch_ids'     => ['nullable', 'array'],
+            'branch_ids.*'   => ['exists:branches,id'],
+            'role_ids'       => ['nullable', 'array'],
+            'role_ids.*'     => ['exists:roles,id'],
+            'active'         => ['nullable', 'boolean'],
         ]);
 
-        $role = Role::withTrashed()->find($data['role_id']);
-
-        // Prevent assigning a role that belongs to a different branch than provided
-        $requestedBranchId = $request->input('branch_id') ?? null;
         $currentUser = Auth::user();
 
         if (!$currentUser) {
             abort(403);
         }
 
-        if ($requestedBranchId !== null && $role instanceof Role) {
-            if (!$currentUser->isSuperAdmin() && $role->branch_id !== null && $role->branch_id != $requestedBranchId) {
-                return back()->withInput()->with('error', 'Selected role belongs to a different branch.');
+        // Validate: must have either global_role_id OR (branch_ids + role_ids)
+        if (!$request->filled('global_role_id') && (!$request->filled('branch_ids') || !$request->filled('role_ids'))) {
+            return back()->withInput()->with('error', 'User must have either a global role OR branch assignments with roles.');
+        }
+
+        // Validate: cannot have both global_role_id AND branch assignments
+        if ($request->filled('global_role_id') && ($request->filled('branch_ids') || $request->filled('role_ids'))) {
+            return back()->withInput()->with('error', 'User cannot have both a global role and branch-specific roles.');
+        }
+
+        // If global role, validate it's actually global
+        if ($request->filled('global_role_id')) {
+            $globalRole = Role::withTrashed()->find($data['global_role_id']);
+            if (!$globalRole || !$globalRole->is_global) {
+                return back()->withInput()->with('error', 'Selected role is not a global role.');
+            }
+
+            // Only superadmin can assign global roles
+            if (!$currentUser->isSuperAdmin()) {
+                return back()->withInput()->with('error', 'Only superadmins can assign global roles.');
+            }
+
+            // Check role status
+            if ($request->boolean('active', false) && ($globalRole->trashed() || !($globalRole->is_active ?? false))) {
+                return back()->withInput()->with('error', 'Cannot activate user because the selected role is inactive or deleted.');
             }
         }
 
-        // Strict validation: user branch must match role branch (unless role has no branch)
-        if (!$currentUser->isSuperAdmin() && $role instanceof Role && $role->branch_id !== null && $requestedBranchId !== null) {
-            if ($role->branch_id != $requestedBranchId) {
-                return back()->withInput()->with('error', 'User branch must match role branch.');
+        // If branch roles, validate branch count matches role count
+        if ($request->filled('branch_ids') && $request->filled('role_ids')) {
+            $branchIds = $data['branch_ids'] ?? [];
+            $roleIds = $data['role_ids'] ?? [];
+
+            if (count($branchIds) !== count($roleIds)) {
+                return back()->withInput()->with('error', 'Number of branches must match number of roles.');
             }
-        }
 
-        $roleName = strtolower(trim($this->roleName($role) ?? ''));
-        $isDevRole = $roleName === 'developer';
-
-        $currentRoleName = strtolower(trim($this->roleName($currentUser->role) ?? ''));
-
-        if ($isDevRole && $currentRoleName !== 'developer') {
-            return back()->withInput()->with('error', 'You cannot assign Developer role.');
-        }
-
-        // Use transaction with role status re-check
-        $oldValues = $this->sanitizeUserAuditValues($user->toArray());
-
-        return DB::transaction(function () use ($request, $data, $user, $role, $actorIdInt, $oldValues) {
-            // Re-check role status inside transaction
-            $role = Role::withTrashed()->lockForUpdate()->find($data['role_id']);
-
-            // When activating a user, ensure role is active
-            if ($request->boolean('active', false)) {
-                if ($role instanceof Role && ($role->trashed() || ! $this->roleIsActive($role))) {
-                    return back()->withInput()->with('error', 'Cannot activate user because the selected role is inactive or deleted.');
+            // Validate all roles are branch roles
+            $roles = Role::withTrashed()->whereIn('id', $roleIds)->get();
+            foreach ($roles as $role) {
+                if ($role->is_global) {
+                    return back()->withInput()->with('error', 'Cannot assign global role as branch role.');
                 }
 
-                // Also block activation if any pivot-assigned roles are inactive/trashed
-                $pivotRoleIds = DB::table('model_has_roles')
-                    ->where('model_type', User::class)
-                    ->where('model_id', $user->id)
-                    ->pluck('role_id')
-                    ->all();
+                // Branch users can only assign roles in their active branch
+                if (!$currentUser->isSuperAdmin()) {
+                    $activeBranchId = session('active_branch_id');
+                    if (!in_array($activeBranchId, $branchIds, true)) {
+                        return back()->withInput()->with('error', 'You can only assign users to your active branch.');
+                    }
 
-                if (is_array($pivotRoleIds) && count($pivotRoleIds) > 0) {
-                    /** @var \Illuminate\Support\Collection<int, Role> $pivotRoles */
-                    $pivotRoles = Role::withTrashed()->whereIn('id', $pivotRoleIds)->get();
-                    foreach ($pivotRoles as $pivotRole) {
-                        if ($pivotRole->trashed() || ! $this->roleIsActive($pivotRole)) {
-                            return back()->withInput()->with('error', 'Cannot activate user because one or more assigned roles are inactive or deleted.');
-                        }
+                    // Check if role belongs to the paired branch
+                    $roleIndex = array_search($role->id, $roleIds);
+                    $pairedBranchId = $branchIds[$roleIndex] ?? null;
+
+                    if ($role->branch_id && $role->branch_id != $pairedBranchId) {
+                        return back()->withInput()->with('error', 'Role must belong to the assigned branch.');
                     }
                 }
-                }
 
+                // Check role status
+                if ($request->boolean('active', false) && ($role->trashed() || !($role->is_active ?? false))) {
+                    return back()->withInput()->with('error', 'Cannot activate user because one of the selected roles is inactive or deleted.');
+                }
+            }
+        }
+
+        // Use transaction
+        $oldValues = $this->sanitizeUserAuditValues($user->toArray());
+
+        return DB::transaction(function () use ($request, $data, $user, $actorIdInt, $oldValues) {
             // Only fill fields that should be mass-assigned (exclude password)
             $user->fill([
                 'name' => $data['name'],
                 'mobile' => $data['mobile'],
                 'email' => $data['email'],
-                'role_id' => $data['role_id'],
             ]);
 
-            $user->active    = $request->boolean('active', false);
-            $user->branch_id = $request->input('branch_id') ?? $role->branch_id ?? $user->branch_id;
+            $user->active         = $request->boolean('active', false);
+            $user->global_role_id = $data['global_role_id'] ?? null;
 
             // Only update password if provided
             if (! empty($data['password'])) {
@@ -402,6 +467,35 @@ class UserController extends Controller
 
             $user->updated_by = $actorIdInt;
             $user->save();
+
+            // Clear existing branch assignments
+            DB::table('branch_user')->where('user_id', $user->id)->delete();
+            DB::table('branch_user_role')->where('user_id', $user->id)->delete();
+
+            // Handle new branch role assignments (only if not global user)
+            if (!$user->global_role_id && $request->filled('branch_ids') && $request->filled('role_ids')) {
+                $branchIds = $data['branch_ids'] ?? [];
+                $roleIds = $data['role_ids'] ?? [];
+
+                for ($i = 0; $i < count($branchIds); $i++) {
+                    // Insert into branch_user
+                    DB::table('branch_user')->insert([
+                        'user_id' => $user->id,
+                        'branch_id' => $branchIds[$i],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    // Insert into branch_user_role
+                    DB::table('branch_user_role')->insert([
+                        'user_id' => $user->id,
+                        'branch_id' => $branchIds[$i],
+                        'role_id' => $roleIds[$i],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
 
             AuditLog::log(
                 'update_user',
@@ -531,29 +625,28 @@ class UserController extends Controller
 
         $oldValues = $this->sanitizeUserAuditValues($user->toArray());
 
-        /** @var \App\Models\Role|null $role */
-        $role = Role::withTrashed()->find($user->role_id);
+        // Check global role status if this is a global user
+        if ($user->global_role_id) {
+            $globalRole = Role::withTrashed()->find($user->global_role_id);
 
-        // Prevent restoring user if assigned role is trashed/inactive or its branch is trashed
-        if ($role instanceof Role) {
-            if ($role->trashed() || ! $this->roleIsActive($role)) {
-                return back()->with('error', 'Cannot restore user because the assigned role is inactive or deleted.');
+            if ($globalRole instanceof Role) {
+                if ($globalRole->trashed() || !($globalRole->is_active ?? false)) {
+                    return back()->with('error', 'Cannot restore user because the assigned global role is inactive or deleted.');
+                }
             }
+        } else {
+            // Check branch roles status
+            $branchRoleIds = DB::table('branch_user_role')
+                ->where('user_id', $user->id)
+                ->pluck('role_id');
 
-            // check branch of role (developers may bypass)
-            try {
-                $currentUser = Auth::user();
-                if (!($currentUser && $currentUser->isSuperAdmin()) ) {
-                        if ($role->branch_id !== null) {
-                        /** @var \App\Models\Branch|null $branch */
-                        $branch = Branch::withTrashed()->find($role->branch_id);
-                        if ($branch && $branch->trashed()) {
-                            return back()->with('error', 'Cannot restore user because the assigned role is inactive or deleted.');
-                        }
+            if ($branchRoleIds->isNotEmpty()) {
+                $branchRoles = Role::withTrashed()->whereIn('id', $branchRoleIds)->get();
+                foreach ($branchRoles as $role) {
+                    if ($role->trashed() || !($role->is_active ?? false)) {
+                        return back()->with('error', 'Cannot restore user because one of the assigned roles is inactive or deleted.');
                     }
                 }
-            } catch (\Throwable $__e) {
-                // ignore
             }
         }
 
@@ -595,7 +688,11 @@ class UserController extends Controller
     public function checkDependencies(Request $request, int $id): \Illuminate\Http\JsonResponse
     {
         /** @var User $user */
-        $user = User::withTrashed()->with(['role' => function($q) { $q->withTrashed(); }, 'branch' => function($q) { $q->withTrashed(); }])->findOrFail($id);
+        $user = User::withTrashed()->with([
+            'globalRole' => function($q) { $q->withTrashed(); },
+            'branchRoles' => function($q) { $q->withTrashed(); },
+            'branches' => function($q) { $q->withTrashed(); }
+        ])->findOrFail($id);
 
         $this->authorize('view', $user);
 
@@ -604,55 +701,85 @@ class UserController extends Controller
 
         // Check if user is deleted and needs restore
         if ($user->trashed()) {
-            // Check role status
-                if ($user->role_id) {
-                /** @var Role|null $role */
-                $role = $user->role;
-                if ($role instanceof Role && $role->trashed()) {
+            // Check global role status
+            if ($user->global_role_id) {
+                $globalRole = $user->globalRole;
+                if ($globalRole instanceof Role && $globalRole->trashed()) {
                     $canProceed = false;
                     $dependencies[] = [
                         'type' => 'deleted_role',
-                        'message' => 'Assigned role is deleted',
-                        'details' => "Role '{$role->name}' must be restored first"
+                        'message' => 'Assigned global role is deleted',
+                        'details' => "Role '{$globalRole->name}' must be restored first"
                     ];
-                } elseif ($role && !($role->is_active ?? true)) {
+                } elseif ($globalRole && !($globalRole->is_active ?? true)) {
                     $canProceed = false;
                     $dependencies[] = [
                         'type' => 'inactive_role',
-                        'message' => 'Assigned role is inactive',
-                        'details' => "Role '{$role->name}' must be activated first"
+                        'message' => 'Assigned global role is inactive',
+                        'details' => "Role '{$globalRole->name}' must be activated first"
                     ];
                 }
-            }
+            } else {
+                // Check branch roles
+                $branchRoles = $user->branchRoles;
+                foreach ($branchRoles as $role) {
+                    if ($role->trashed()) {
+                        $canProceed = false;
+                        $dependencies[] = [
+                            'type' => 'deleted_role',
+                            'message' => 'Assigned branch role is deleted',
+                            'details' => "Role '{$role->name}' must be restored first"
+                        ];
+                    } elseif (!($role->is_active ?? true)) {
+                        $canProceed = false;
+                        $dependencies[] = [
+                            'type' => 'inactive_role',
+                            'message' => 'Assigned branch role is inactive',
+                            'details' => "Role '{$role->name}' must be activated first"
+                        ];
+                    }
+                }
 
-            // Check branch status
-            if ($user->branch_id) {
-                /** @var Branch|null $branch */
-                $branch = $user->branch;
-                if ($branch instanceof Branch && $branch->trashed()) {
-                    $canProceed = false;
-                    $dependencies[] = [
-                        'type' => 'deleted_branch',
-                        'message' => 'Assigned branch is deleted',
-                        'details' => "Branch '{$branch->name}' must be restored first"
-                    ];
+                // Check branch status
+                $branches = $user->branches;
+                foreach ($branches as $branch) {
+                    if ($branch->trashed()) {
+                        $canProceed = false;
+                        $dependencies[] = [
+                            'type' => 'deleted_branch',
+                            'message' => 'Assigned branch is deleted',
+                            'details' => "Branch '{$branch->name}' must be restored first"
+                        ];
+                    }
                 }
             }
         }
 
         // Check if user is being activated
         if (!$user->trashed() && !$user->active) {
-            // Check role status
-            if ($user->role_id) {
-                /** @var Role|null $role */
-                $role = $user->role;
-                if ($role instanceof Role && !($role->is_active ?? true)) {
+            // Check global role status
+            if ($user->global_role_id) {
+                $globalRole = $user->globalRole;
+                if ($globalRole instanceof Role && !($globalRole->is_active ?? true)) {
                     $canProceed = false;
                     $dependencies[] = [
                         'type' => 'inactive_role',
-                        'message' => 'Assigned role is inactive',
-                        'details' => "Role '{$role->name}' must be activated first"
+                        'message' => 'Assigned global role is inactive',
+                        'details' => "Role '{$globalRole->name}' must be activated first"
                     ];
+                }
+            } else {
+                // Check branch roles
+                $branchRoles = $user->branchRoles;
+                foreach ($branchRoles as $role) {
+                    if (!($role->is_active ?? true)) {
+                        $canProceed = false;
+                        $dependencies[] = [
+                            'type' => 'inactive_role',
+                            'message' => 'Assigned branch role is inactive',
+                            'details' => "Role '{$role->name}' must be activated first"
+                        ];
+                    }
                 }
             }
         }

@@ -11,7 +11,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Phase 3: Ensure authenticated users have valid role assignment and active branch
+        $middleware->appendToGroup('web', [
+            \App\Http\Middleware\CheckRoleAssignment::class,
+            \App\Http\Middleware\EnsureActiveBranch::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

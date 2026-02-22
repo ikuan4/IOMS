@@ -3,6 +3,7 @@
 @section('title', 'Create New Role')
 
 @section('content')
+    @php /** @var \Illuminate\Support\ViewErrorBag $errors */ @endphp
     <div class="header-card">
         <div class="header-left">
             <h2>Add Role</h2>
@@ -26,29 +27,26 @@
         <div class="card" style="margin-top:16px;">
             <div style="display:flex;flex-direction:column;gap:18px;max-width:540px;">
 
-                {{-- Branch selection for Developers; hidden input for others --}}
-                @php
-                    /** @var \App\Models\User|null $currentUser */
-                    $currentUser = auth()->user();
-                    $isDeveloper = $currentUser ? $currentUser->isSuperAdmin() : false;
-                @endphp
-                @if($isDeveloper)
-                    <div>
-                        <label for="branch_id" style="font-size:15px;font-weight:600;">Branch</label><br>
-                        <select name="branch_id" id="branch_id" style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
-                            <option value="">-- Select Branch (optional) --</option>
-                            @foreach($branches as $b)
-                                <option value="{{ $b->id }}" {{ old('branch_id') == $b->id ? 'selected' : '' }}>{{ $b->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('branch_id')
-                            <div style="color:#dc2626;font-size:13px;">{{ $message }}</div>
-                        @enderror
-                        <p class="muted" style="font-size:13px;margin-top:6px;">Assign this role to a specific branch. If left empty, role applies globally.</p>
+                {{-- Global Role Toggle --}}
+                <div>
+                    <label style="font-size:15px;font-weight:600;">Role Type <span style="color:#dc2626;margin-left:2px;">*</span></label><br>
+                    <div style="display:flex;gap:16px;margin-top:8px;">
+                        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="is_global" value="1" {{ old('is_global', '0') == '1' ? 'checked' : '' }} style="width:18px;height:18px;cursor:pointer;">
+                            <span style="font-weight:600;">Global Role</span>
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;">
+                            <input type="radio" name="is_global" value="0" {{ old('is_global', '0') == '0' ? 'checked' : '' }} style="width:18px;height:18px;cursor:pointer;">
+                            <span style="font-weight:600;">Branch-Specific Role</span>
+                        </label>
                     </div>
-                @else
-                    <input type="hidden" name="branch_id" value="{{ $currentUser->branch_id }}">
-                @endif
+                    @error('is_global')
+                        <div style="color:#dc2626;font-size:13px;">{{ $message }}</div>
+                    @enderror
+                    <p class="muted" style="font-size:13px;margin-top:6px;">
+                        Global roles can be assigned to users who manage the entire system. Branch-specific roles are assigned per branch.
+                    </p>
+                </div>
 
                 {{-- Role Name (required) --}}
                 <div>

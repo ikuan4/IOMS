@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Branch;
@@ -63,8 +64,7 @@ class User extends Authenticatable
         'active',
         'email_bounce_count',
         'email_bounced_at',
-        'role_id',
-        'branch_id',
+        'global_role_id',
     ];
 
     /**
@@ -100,19 +100,122 @@ class User extends Authenticatable
             'email_bounced_at' => 'datetime',
             'email_bounce_count' => 'integer',
             'active' => 'boolean',
-            'role_id' => 'integer',
-            'branch_id' => 'integer',
+            'global_role_id' => 'integer',
             'password' => 'hashed',
         ];
     }
 
-    // BelongsTo relation to Role
+    // ===================================
+    // ROLE RELATIONSHIPS (NEW STRUCTURE)
+    // ===================================
+
     /**
+     * Global role relationship (for users with global_role_id set).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Role, $this>
+     */
+    public function globalRole(): BelongsTo
+    {
+        return $this->belongsTo(Role::class, 'global_role_id');
+    }
+
+    /**
+     * Legacy compatibility: redirect to globalRole() for transition period.
+     * @deprecated Use globalRole() instead
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Role, $this>
      */
     public function role(): BelongsTo
     {
-        return $this->belongsTo(Role::class);
+        return $this->globalRole();
+    }
+
+    /**
+     * Branches this user is assigned to (via branch_user pivot).
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\Branch, $this>
+     */
+    public function branches(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class, 'branch_user', 'user_id', 'branch_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Branch roles assigned to this user (via branch_user_role).
+     * Note: This returns roles with their branch pivot data.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\Role, $this>
+     */
+    public function branchRoles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Role::class, 'branch_user_role', 'user_id', 'role_id')
+            ->withPivot('branch_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the role for a specific branch.
+     *
+     * @param int $branchId
+     * @return \App\Models\Role|null
+     */
+    public function roleForBranch(int $branchId): ?Role
+    {
+        return \DB::table('branch_user_role')
+            ->where('user_id', $this->id)
+            ->where('branch_id', $branchId)
+            ->first()?->role_id 
+            ? Role::find(\DB::table('branch_user_role')
+                ->where('user_id', $this->id)
+                ->where('branch_id', $branchId)
+                ->value('role_id'))
+            : null;
+    }
+
+    /**
+     * Get active branch from session.
+     *
+     * @return \App\Models\Branch|null
+     */
+    public function activeBranch(): ?Branch
+    {
+        $activeBranchId = session('active_branch_id');
+        
+        if (!$activeBranchId) {
+            return null;
+        }
+
+        return Branch::find($activeBranchId);
+    }
+
+    /**
+     * Set active branch in session.
+     *
+     * @param int|null $branchId
+     * @return void
+     */
+    public function setActiveBranch(?int $branchId): void
+    {
+        if ($branchId === null) {
+            session()->forget('active_branch_id');
+            return;
+        }
+
+        // Verify user has access to this branch
+        if ($this->global_role_id) {
+            // Global users can access any branch
+            session(['active_branch_id' => $branchId]);
+        } else {
+            // Branch users must be assigned to the branch
+            $hasAccess = \DB::table('branch_user')
+                ->where('user_id', $this->id)
+                ->where('branch_id', $branchId)
+                ->exists();
+
+            if ($hasAccess) {
+                session(['active_branch_id' => $branchId]);
+            }
+        }
     }
 
     /**
@@ -130,18 +233,26 @@ class User extends Authenticatable
     /**
      * Resolve the user's effective role.
      *
-     * Uses only direct FK assignment (`users.role_id` => `roles.id`).
-     * Pivot table (model_has_roles) is deprecated for User-Role assignments.
+     * NEW STRUCTURE:
+     * - If user has global_role_id: return that global role
+     * - If user is branch user: return role for active branch (from session)
+     * - Otherwise: return null
      */
     public function effectiveRole(): ?Role
     {
         try {
-            if ($this->relationLoaded('role') && $this->getRelation('role')) {
-                return $this->getRelation('role');
+            // Check for global role first
+            if ($this->global_role_id) {
+                if ($this->relationLoaded('globalRole') && $this->getRelation('globalRole')) {
+                    return $this->getRelation('globalRole');
+                }
+                return $this->globalRole()->first();
             }
 
-            if (!empty($this->role_id)) {
-                return $this->role()->first();
+            // Branch user: get role for active branch
+            $activeBranchId = session('active_branch_id');
+            if ($activeBranchId) {
+                return $this->roleForBranch($activeBranchId);
             }
 
             return null;
@@ -152,23 +263,20 @@ class User extends Authenticatable
 
     /**
      * Check if this user is the protected Super Admin user.
+     * NEW STRUCTURE: Check global role with is_global=true and slug=developer
      */
     public function isSuperAdmin(): bool
     {
-        // Check if user has Developer role
-        $role = $this->effectiveRole();
-        if ($role) {
-            $slug = strtolower(trim((string) ($role->slug ?? '')));
-            $name = strtolower(trim((string) ($role->name ?? '')));
-            if ($slug === 'developer' || $name === 'developer') {
-                return true;
+        // Check global role
+        if ($this->global_role_id) {
+            $role = $this->effectiveRole();
+            if ($role && $role->is_global) {
+                $slug = strtolower(trim((string) ($role->slug ?? '')));
+                $name = strtolower(trim((string) ($role->name ?? '')));
+                if ($slug === 'developer' || $name === 'developer') {
+                    return true;
+                }
             }
-        }
-
-        // Fallback: Developer user with no role and no branch (legacy)
-        if ($this->role_id === null && $this->branch_id === null) {
-            $email = strtolower(trim((string) ($this->email ?? '')));
-            return $email === 'ikuan4@gmail.com';
         }
 
         return false;
@@ -249,11 +357,13 @@ class User extends Authenticatable
      * Get manageable roles for this user (descendants of user's role).
      * Enforces priority hierarchy: users can only assign roles with equal or lower priority.
      *
-     * @return \Illuminate\Support\Collection<int, \App\Models\Role>
+     * NEW STRUCTURE:
+     * - Global users can manage all roles (global + all branch roles)
+     * - Branch users can only manage roles within their active branch
      */
     public function getManageableRoles(): \Illuminate\Support\Collection
     {
-        // Developer sees all active roles
+        // Global user (Developer) sees all active roles
         if ($this->isSuperAdmin()) {
             $roles = Role::where('is_active', true)
                 ->whereNull('deleted_at')
@@ -262,7 +372,12 @@ class User extends Authenticatable
             return $roles;
         }
 
-        // Non-developers: return roles within the same branch or the user's own role
+        // Branch user: get roles in active branch only
+        $activeBranchId = session('active_branch_id');
+        if (!$activeBranchId) {
+            return collect([]);
+        }
+
         $effectiveRole = $this->effectiveRole();
         if (!$effectiveRole) {
             return collect([]);
@@ -270,21 +385,18 @@ class User extends Authenticatable
 
         $myPriority = $effectiveRole->priority ?? 999;
 
-        $roles = Role::where('branch_id', $this->branch_id)
-          ->where('is_active', true)
-          ->whereNull('deleted_at')
-          ->orderBy('priority', 'asc')
-          ->get();
+        // Get roles in the same branch with priority >= myPriority (lower number = higher authority)
+        $roles = Role::where('branch_id', $activeBranchId)
+            ->where('is_active', true)
+            ->where('is_global', false)
+            ->whereNull('deleted_at')
+            ->orderBy('priority', 'asc')
+            ->get();
 
-        // Remove Developer role for non-developer users and enforce priority
-        $roles = $roles->reject(function ($r) use ($myPriority) {
-            // Reject super admin roles for non-super admins
-            if ($r->isSuperAdmin() && !$this->isSuperAdmin()) {
-                return true;
-            }
-            // Reject roles with higher priority (lower number = higher priority)
+        // Filter by priority: can only manage roles with priority >= myPriority
+        $roles = $roles->filter(function ($r) use ($myPriority) {
             $rolePriority = $r->priority ?? 999;
-            return $rolePriority < $myPriority;
+            return $rolePriority >= $myPriority;
         })->values();
 
         return $roles;
@@ -320,31 +432,43 @@ class User extends Authenticatable
     /**
      * Get manageable users for this user (users with descendant roles).
      *
+     * NEW STRUCTURE:
+     * - Global users can manage all users
+     * - Branch users can only manage users in their active branch
+     *
      * @return \Illuminate\Support\Collection<int, \App\Models\User>
      */
     public function getManageableUsers(): \Illuminate\Support\Collection
     {
         if ($this->isSuperAdmin()) {
-            return User::with(['role', 'branch'])->where('id', '!=', $this->id)->get();
+            return User::with(['globalRole'])->where('id', '!=', $this->id)->get();
         }
 
-        // Non-developers: return users in the same branch (branch must exist and be active)
-        return User::with(['role', 'branch'])
-            ->where('branch_id', $this->branch_id)
-            ->where('id', '!=', $this->id)
-            ->whereHas('branch', function($q) {
-                $q->whereNull('deleted_at');
+        // Branch user: manage users in active branch only
+        $activeBranchId = session('active_branch_id');
+        if (!$activeBranchId) {
+            return collect([]);
+        }
+
+        // Get users who have a role in this branch via branch_user_role
+        return User::with(['globalRole'])
+            ->whereHas('branchRoles', function($q) use ($activeBranchId) {
+                $q->wherePivot('branch_id', $activeBranchId);
             })
+            ->where('id', '!=', $this->id)
             ->get();
     }
 
-    // BelongsTo relation to Branch
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Branch, $this>
+     * Helper method to get user's branch (for legacy compatibility).
+     * For global users: returns null
+     * For branch users: returns active branch from session
+     *
+     * @return \App\Models\Branch|null
      */
-    public function branch(): BelongsTo
+    public function branch(): ?Branch
     {
-        return $this->belongsTo(Branch::class);
+        return $this->activeBranch();
     }
 
     // BelongsTo relation createdBy

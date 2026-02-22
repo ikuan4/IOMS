@@ -17,14 +17,21 @@ class DummyRolesSeeder extends Seeder
             $branches = Branch::all();
         }
 
-        // Ensure Developer role exists
-        $special = [
-            ['name' => 'Developer', 'slug' => 'developer', 'is_active' => 1],
-        ];
-
-        foreach ($special as $r) {
-            Role::updateOrCreate(['slug' => $r['slug']], array_merge($r, ['guard_name' => 'web']));
-        }
+        // Ensure Developer role exists as GLOBAL (not branch-specific)
+        Role::updateOrInsert(
+            ['slug' => 'developer', 'branch_id' => null],
+            [
+                'name' => 'Developer',
+                'slug' => 'developer',
+                'is_active' => 1,
+                'is_global' => true,
+                'priority' => 1,
+                'branch_id' => null,
+                'guard_name' => 'web',
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
 
         // Common role names in Indian organizations
         $roleNames = [
@@ -44,19 +51,24 @@ class DummyRolesSeeder extends Seeder
             $selectedRoles = array_rand(array_flip($roleNames), $numberOfRoles);
 
             foreach ($selectedRoles as $roleName) {
-                // Make role name unique by adding branch name
-                $uniqueRoleName = $roleName . ' - ' . $branch->name;
-                $slug = Str::slug($uniqueRoleName);
+                // Use simple slug (can be same across branches due to unique constraint on slug+branch_id)
+                $slug = Str::slug($roleName);
 
-                Role::updateOrCreate([
-                    'slug' => $slug,
-                ], [
-                    'name' => $uniqueRoleName,
-                    'description' => $roleName . ' at ' . $branch->name,
-                    'is_active' => 1,
-                    'guard_name' => 'web',
-                    'branch_id' => $branch->id,
-                ]);
+                // Check if role with this slug already exists in this branch
+                Role::updateOrInsert(
+                    ['slug' => $slug, 'branch_id' => $branch->id],
+                    [
+                        'name' => $roleName . ' - ' . $branch->name,
+                        'description' => $roleName . ' at ' . $branch->name,
+                        'is_active' => 1,
+                        'is_global' => false,
+                        'priority' => 100,
+                        'guard_name' => 'web',
+                        'branch_id' => $branch->id,
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
             }
         }
     }

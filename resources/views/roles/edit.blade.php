@@ -3,6 +3,7 @@
 @section('title', 'Edit Role')
 
 @section('content')
+    @php /** @var \Illuminate\Support\ViewErrorBag $errors */ @endphp
     <div class="header-card">
         <div class="header-left">
             <h2>Edit Role: {{ $role->name }}</h2>
@@ -27,29 +28,23 @@
         <div class="card" style="margin-top:16px;">
             <div style="display:flex;flex-direction:column;gap:18px;max-width:540px;">
 
-                {{-- Branch selection for Developers; hidden input for others --}}
-                @php
-                    /** @var \App\Models\User|null $currentUser */
-                    $currentUser = auth()->user();
-                    $isDeveloper = $currentUser ? $currentUser->isSuperAdmin() : false;
-                @endphp
-                @if($isDeveloper)
-                    <div>
-                        <label for="branch_id" style="font-size:15px;font-weight:600;">Branch</label><br>
-                        <select name="branch_id" id="branch_id" style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
-                            <option value="">-- Select Branch (optional) --</option>
-                            @foreach($branches as $b)
-                                <option value="{{ $b->id }}" {{ (old('branch_id', $role->branch_id) == $b->id) ? 'selected' : '' }}>{{ $b->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('branch_id')
-                            <div style="color:#dc2626;font-size:13px;">{{ $message }}</div>
-                        @enderror
-                        <p class="muted" style="font-size:13px;margin-top:6px;">Assign this role to a specific branch. If left empty, role applies globally.</p>
+                {{-- Global Role Toggle (Read-only display) --}}
+                <div>
+                    <label style="font-size:15px;font-weight:600;">Role Type</label><br>
+                    <div style="margin-top:8px;padding:12px 16px;background:var(--muted-bg,#f3f4f6);border-radius:8px;display:inline-flex;align-items:center;gap:8px;">
+                        @if($role->is_global)
+                            <span data-feather="globe" style="width:18px;height:18px;color:#3b82f6;"></span>
+                            <span style="font-weight:600;">Global Role</span>
+                        @else
+                            <span data-feather="map-pin" style="width:18px;height:18px;color:#22c55e;"></span>
+                            <span style="font-weight:600;">Branch-Specific Role</span>
+                        @endif
                     </div>
-                @else
-                    <input type="hidden" name="branch_id" value="{{ $currentUser->branch_id }}">
-                @endif
+                    <input type="hidden" name="is_global" value="{{ $role->is_global ? '1' : '0' }}">
+                    <p class="muted" style="font-size:13px;margin-top:6px;">
+                        Role type cannot be changed after creation. To change the type, create a new role.
+                    </p>
+                </div>
 
                 {{-- Role Name (required) --}}
                 <div>

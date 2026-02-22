@@ -21,8 +21,17 @@ class ContractPolicy
             return false;
         }
 
-        // Non-superadmin users can only view contracts from their own branch
-        return $contract->branch_id === $user->branch_id;
+        // Branch users can only view contracts in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contract->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function create(User $user): bool
@@ -39,8 +48,17 @@ class ContractPolicy
             return false;
         }
 
-        // Non-superadmin users can only edit contracts from their own branch
-        return $contract->branch_id === $user->branch_id;
+        // Branch users can only edit contracts in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contract->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function delete(User $user, Contract $contract): bool
@@ -51,8 +69,17 @@ class ContractPolicy
             return false;
         }
 
-        // Non-superadmin users can only delete contracts from their own branch
-        return $contract->branch_id === $user->branch_id;
+        // Branch users can only delete contracts in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contract->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function restore(User $user, Contract $contract): bool
@@ -63,8 +90,17 @@ class ContractPolicy
             return false;
         }
 
-        // Non-superadmin users can only restore contracts from their own branch
-        return $contract->branch_id === $user->branch_id;
+        // Branch users can only restore contracts in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contract->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function export(User $user): bool
@@ -91,7 +127,17 @@ class ContractPolicy
             return false;
         }
 
-        return $contract->branch_id === $user->branch_id;
+        // Branch users can only manage reminders for contracts in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contract->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function manageRecipients(User $user, Contract $contract): bool
@@ -102,6 +148,16 @@ class ContractPolicy
             return false;
         }
 
-        return $contract->branch_id === $user->branch_id;
+        // Branch users can only manage recipients for contracts in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contract->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 }

@@ -80,8 +80,10 @@ class ContractsSeeder extends Seeder
 
             $this->command->info("Processing {$branch->name} (ID: {$branch->id})...");
 
-            // Get users from this branch to use as creators
-            $branchUsers = User::where('branch_id', $branch->id)->get();
+            // Get users assigned to this branch to use as creators
+            $branchUsers = User::whereHas('branches', function ($q) use ($branch) {
+                $q->where('branch_id', $branch->id);
+            })->where('active', true)->get();
 
             if ($branchUsers->isEmpty()) {
                 $this->command->warn("No users found in {$branch->name}. Skipping...");

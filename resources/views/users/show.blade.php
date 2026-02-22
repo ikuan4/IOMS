@@ -22,7 +22,18 @@
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
                         <div>
                             <h2 style="margin:0;">{{ $user->name }}</h2>
-                            <div style="color:var(--muted,#6b7280);margin-top:6px;">{{ optional($user->role)->name ?? 'No Role' }} — {{ optional($user->branch)->name ?? 'No Branch' }}</div>
+                            <div style="color:var(--muted,#6b7280);margin-top:6px;">
+                                @if($user->global_role_id)
+                                    <strong>Global Role:</strong> {{ optional($user->globalRole)->name ?? 'Unknown' }}
+                                @else
+                                    <strong>Branch Roles:</strong> 
+                                    @if($user->branches->count() > 0)
+                                        {{ $user->branches->count() }} {{ Str::plural('assignment', $user->branches->count()) }}
+                                    @else
+                                        No assignments
+                                    @endif
+                                @endif
+                            </div>
                         </div>
                     </div>
 
@@ -30,8 +41,32 @@
                         <div><strong>Mobile:</strong> {{ $user->mobile ?? '-' }}</div>
                         <div><strong>Email:</strong> {{ $user->email ?? '-' }}</div>
 
-                        <div><strong>Role:</strong> {{ optional($user->role)->name ?? '-' }}</div>
-                        <div><strong>Branch:</strong> {{ optional($user->branch)->name ?? '-' }}</div>
+                        @if($user->global_role_id)
+                            <div style="grid-column:1/3;"><strong>Global Role:</strong> 
+                                <span style="background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:600;">
+                                    {{ optional($user->globalRole)->name ?? '-' }}
+                                </span>
+                            </div>
+                        @else
+                            <div style="grid-column:1/3;">
+                                <strong>Branch Assignments:</strong>
+                                <div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">
+                                    @forelse($user->branches as $branch)
+                                        @php
+                                            $roleForBranch = $user->branchRoles()->wherePivot('branch_id', $branch->id)->first();
+                                        @endphp
+                                        <div style="background:#f9fafb;padding:10px 14px;border-radius:8px;border:1px solid #e5e7eb;">
+                                            <strong>{{ $branch->name }}</strong>: 
+                                            <span style="background:#e0f2fe;color:#0369a1;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600;">
+                                                {{ optional($roleForBranch)->name ?? 'No Role' }}
+                                            </span>
+                                        </div>
+                                    @empty
+                                        <span style="color:#6b7280;">No branch assignments</span>
+                                    @endforelse
+                                </div>
+                            </div>
+                        @endif
 
                         <div><strong>Active:</strong> {{ $user->active ? 'Yes' : 'No' }}</div>
                         <div><strong>Deleted At:</strong> {{ optional($user->deleted_at)->toDateTimeString() ?? '-' }}</div>

@@ -70,12 +70,10 @@ trait HasAuditFields
             }
 
             $deletedAtColumn = null;
-            if (method_exists($model, 'getDeletedAtColumn')) {
-                try {
-                    $deletedAtColumn = $model->getDeletedAtColumn();
-                } catch (\Throwable $__e) {
-                    $deletedAtColumn = null;
-                }
+            try {
+                $deletedAtColumn = $model->getDeletedAtColumn();
+            } catch (\Throwable $__e) {
+                $deletedAtColumn = null;
             }
 
             if ($deletedAtColumn) {

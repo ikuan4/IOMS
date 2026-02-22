@@ -41,12 +41,12 @@ class ContractController extends Controller
         $contractTypeId = $request->query('contract_type_id');
         $branchId = $request->query('branch_id');
 
-        // Branch filtering: Super admin can select branch, others see only their branch
+        // Branch filtering: Super admin can select branch, others see only their active branch
         if ($user->isSuperAdmin()) {
             $selectedBranchId = $branchId;
             $branches = Branch::orderBy('name')->get();
         } else {
-            $selectedBranchId = $user->branch_id;
+            $selectedBranchId = session('active_branch_id');
             $branches = collect([]);
         }
 

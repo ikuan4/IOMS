@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 class UserPolicy
 {
@@ -21,8 +22,19 @@ class UserPolicy
             return true;
         }
 
-        // Check branch match
-        if ($model->branch_id !== $user->branch_id) {
+        // Branch users can only view users in their active branch
+        $activeBranchId = session('active_branch_id');
+        if (!$activeBranchId) {
+            return false;
+        }
+
+        // Check if model has role in active branch
+        $modelHasRoleInBranch = \DB::table('branch_user_role')
+            ->where('user_id', $model->id)
+            ->where('branch_id', $activeBranchId)
+            ->exists();
+
+        if (!$modelHasRoleInBranch && !$model->global_role_id) {
             return false;
         }
 
@@ -55,8 +67,19 @@ class UserPolicy
             return true;
         }
 
-        // Check branch match
-        if ($model->branch_id !== $user->branch_id) {
+        // Branch users can only update users in their active branch
+        $activeBranchId = session('active_branch_id');
+        if (!$activeBranchId) {
+            return false;
+        }
+
+        // Check if model has role in active branch
+        $modelHasRoleInBranch = \DB::table('branch_user_role')
+            ->where('user_id', $model->id)
+            ->where('branch_id', $activeBranchId)
+            ->exists();
+
+        if (!$modelHasRoleInBranch && !$model->global_role_id) {
             return false;
         }
 
@@ -84,8 +107,19 @@ class UserPolicy
             return true;
         }
 
-        // Check branch match
-        if ($model->branch_id !== $user->branch_id) {
+        // Branch users can only delete users in their active branch
+        $activeBranchId = session('active_branch_id');
+        if (!$activeBranchId) {
+            return false;
+        }
+
+        // Check if model has role in active branch
+        $modelHasRoleInBranch = \DB::table('branch_user_role')
+            ->where('user_id', $model->id)
+            ->where('branch_id', $activeBranchId)
+            ->exists();
+
+        if (!$modelHasRoleInBranch && !$model->global_role_id) {
             return false;
         }
 
@@ -108,8 +142,19 @@ class UserPolicy
             return true;
         }
 
-        // Check branch match
-        if ($model->branch_id !== $user->branch_id) {
+        // Branch users can only restore users in their active branch
+        $activeBranchId = session('active_branch_id');
+        if (!$activeBranchId) {
+            return false;
+        }
+
+        // Check if model has role in active branch
+        $modelHasRoleInBranch = \DB::table('branch_user_role')
+            ->where('user_id', $model->id)
+            ->where('branch_id', $activeBranchId)
+            ->exists();
+
+        if (!$modelHasRoleInBranch && !$model->global_role_id) {
             return false;
         }
 

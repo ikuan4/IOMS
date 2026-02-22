@@ -54,6 +54,56 @@
     {{-- RIGHT SECTION --}}
     <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
 
+        {{-- Branch Switcher (for branch users only) --}}
+        @auth
+        @if(!auth()->user()->global_role_id && auth()->user()->branches->count() > 0)
+            <div class="branch-switcher" style="position:relative;">
+                <button
+                    type="button"
+                    class="branch-switcher-toggle"
+                    id="branchSwitcherToggle"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    style="display:inline-flex; align-items:center; gap:8px; background:var(--card); border:1px solid var(--border, #e5e7eb); padding:8px 12px; border-radius:8px; cursor:pointer; color:var(--text); font-weight:600; font-size:14px;"
+                >
+                    <span data-feather="briefcase" style="width:18px;height:18px;"></span>
+                    <span id="activeBranchName">
+                        @php
+                            $activeBranch = auth()->user()->branches->firstWhere('id', session('active_branch_id'));
+                        @endphp
+                        {{ $activeBranch ? $activeBranch->name : 'Select Branch' }}
+                    </span>
+                    <span data-feather="chevron-down" style="width:16px;height:16px;"></span>
+                </button>
+
+                <div class="branch-switcher-dropdown" id="branchSwitcherDropdown" role="menu" style="position:absolute; right:0; top:52px; background:var(--card); border-radius:8px; box-shadow:0 8px 30px rgba(0,0,0,0.12); min-width:220px; overflow:hidden; display:none; z-index:200;">
+                    <div style="padding:12px 14px; border-bottom:1px solid rgba(0,0,0,0.06); font-weight:700; font-size:13px; color:var(--muted, #6b7280);">
+                        SWITCH BRANCH
+                    </div>
+                    @foreach(auth()->user()->branches as $branch)
+                        <form method="POST" action="{{ route('branches.switch.post') }}" style="margin:0;">
+                            @csrf
+                            <input type="hidden" name="branch_id" value="{{ $branch->id }}">
+                            <button
+                                type="submit"
+                                class="dropdown-item"
+                                role="menuitem"
+                                style="width:100%; text-align:left; display:flex; align-items:center; gap:10px; padding:10px 14px; color:var(--text); border:0; background:{{ session('active_branch_id') == $branch->id ? 'rgba(34,197,94,0.1)' : 'transparent' }}; font-weight:600; cursor:pointer;"
+                            >
+                                @if(session('active_branch_id') == $branch->id)
+                                    <span data-feather="check-circle" style="width:18px;height:18px;color:#22c55e;"></span>
+                                @else
+                                    <span data-feather="circle" style="width:18px;height:18px;"></span>
+                                @endif
+                                <span>{{ $branch->name }}</span>
+                            </button>
+                        </form>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+        @endauth
+
         {{-- Theme Toggle --}}
         <button id="themeToggle" class="theme-toggle" aria-pressed="false" title="Toggle theme">
             <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -139,6 +189,14 @@ document.addEventListener('DOMContentLoaded', function () {
         e.stopPropagation();
         const isOpen = dropdown.classList.toggle('open');
         toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        
+        // Close branch switcher if open
+        const branchDropdown = document.getElementById('branchSwitcherDropdown');
+        if (branchDropdown) {
+            branchDropdown.style.display = 'none';
+            const branchToggle = document.getElementById('branchSwitcherToggle');
+            if (branchToggle) branchToggle.setAttribute('aria-expanded', 'false');
+        }
     });
 
     // Close when clicking outside
@@ -148,6 +206,33 @@ document.addEventListener('DOMContentLoaded', function () {
             toggle.setAttribute('aria-expanded', 'false');
         }
     });
+    
+    // Branch switcher dropdown
+    const branchToggle = document.getElementById('branchSwitcherToggle');
+    const branchDropdown = document.getElementById('branchSwitcherDropdown');
+    
+    if (branchToggle && branchDropdown) {
+        branchToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            const isOpen = branchDropdown.style.display === 'block';
+            branchDropdown.style.display = isOpen ? 'none' : 'block';
+            branchToggle.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+            
+            // Close user menu if open
+            if (dropdown.classList.contains('open')) {
+                dropdown.classList.remove('open');
+                toggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        
+        // Close branch dropdown when clicking outside
+        document.addEventListener('click', function () {
+            if (branchDropdown.style.display === 'block') {
+                branchDropdown.style.display = 'none';
+                branchToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
 });
 </script>
 @endpush

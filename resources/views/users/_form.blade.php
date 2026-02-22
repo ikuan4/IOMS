@@ -67,22 +67,58 @@
             <input id="password_confirmation" name="password_confirmation" type="text" autocomplete="new-password" {{ !$user->exists ? 'required' : '' }} style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;">
         </div>
 
-        <div>
-            <label for="role_id" style="font-size:15px;font-weight:600;">Role <span style="color:#dc2626;margin-left:2px;">*</span></label><br>
-            <select id="role_id" name="role_id" required style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;background:white;">
-                <option value="">-- Select Role --</option>
-                @foreach($roles as $role)
-                    @php
-                        $isProtectedRole = method_exists($role, 'isSuperAdmin') && $role->isSuperAdmin();
-                        $currentIsSuperAdmin = auth()->user() && method_exists(auth()->user(), 'isSuperAdmin') && auth()->user()->isSuperAdmin();
-                    @endphp
-                    @if($isProtectedRole && !$currentIsSuperAdmin)
-                        @continue
-                    @endif
-                    <option value="{{ $role->id }}" {{ old('role_id', $user->role_id) == $role->id ? 'selected' : '' }}>{{ $role->name }}</option>
-                @endforeach
-            </select>
-            @error('role_id')<div style="color:#dc2626;font-size:13px;">{{ $message }}</div>@enderror
+        {{-- Role Assignment Section --}}
+        <div style="border:1px solid #e5e7eb;border-radius:10px;padding:18px;background:#f9fafb;">
+            <div style="font-size:16px;font-weight:700;margin-bottom:14px;">Role Assignment <span style="color:#dc2626;margin-left:2px;">*</span></div>
+
+            {{-- Role Type Selection --}}
+            <div style="margin-bottom:18px;">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px;">
+                    <input type="radio" name="role_type" value="global" id="roleTypeGlobal" {{ old('role_type', $user->global_role_id ? 'global' : 'branch') == 'global' ? 'checked' : '' }} onchange="toggleRoleType()" style="width:18px;height:18px;">
+                    <span style="font-size:15px;font-weight:600;">Global Role</span>
+                    <span style="font-size:13px;color:#6b7280;">(System-wide access)</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="radio" name="role_type" value="branch" id="roleTypeBranch" {{ old('role_type', $user->global_role_id ? 'global' : 'branch') == 'branch' ? 'checked' : '' }} onchange="toggleRoleType()" style="width:18px;height:18px;">
+                    <span style="font-size:15px;font-weight:600;">Branch Roles</span>
+                    <span style="font-size:13px;color:#6b7280;">(Branch-specific access)</span>
+                </label>
+            </div>
+
+            {{-- Global Role Selection --}}
+            <div id="globalRoleSection" style="display:none;">
+                <label for="global_role_id" style="font-size:15px;font-weight:600;">Select Global Role</label><br>
+                <select id="global_role_id" name="global_role_id" style="width:100%;padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;font-size:15px;background:white;">
+                    <option value="">-- Select Global Role --</option>
+                    @foreach($roles->where('is_global', true) as $role)
+                        @php
+                            $isProtectedRole = method_exists($role, 'isSuperAdmin') && $role->isSuperAdmin();
+                            $currentIsSuperAdmin = auth()->user() && method_exists(auth()->user(), 'isSuperAdmin') && auth()->user()->isSuperAdmin();
+                        @endphp
+                        @if($isProtectedRole && !$currentIsSuperAdmin)
+                            @continue
+                        @endif
+                        <option value="{{ $role->id }}" {{ old('global_role_id', $user->global_role_id) == $role->id ? 'selected' : '' }}>{{ $role->name }}</option>
+                    @endforeach
+                </select>
+                @error('global_role_id')<div style="color:#dc2626;font-size:13px;margin-top:6px;">{{ $message }}</div>@enderror
+            </div>
+
+            {{-- Branch Roles Selection --}}
+            <div id="branchRolesSection" style="display:none;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <label style="font-size:15px;font-weight:600;">Branch & Role Assignments</label>
+                    <button type="button" onclick="addBranchRoleRow()" style="background:#22c55e;color:white;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;">+ Add Branch</button>
+                </div>
+                
+                <div id="branchRoleList" style="display:flex;flex-direction:column;gap:10px;">
+                    {{-- Dynamic rows will be added here --}}
+                </div>
+                @error('branch_ids')<div style="color:#dc2626;font-size:13px;margin-top:6px;">{{ $message }}</div>@enderror
+                @error('role_ids')<div style="color:#dc2626;font-size:13px;margin-top:6px;">{{ $message }}</div>@enderror
+                @error('branch_ids.*')<div style="color:#dc2626;font-size:13px;margin-top:6px;">{{ $message }}</div>@enderror
+                @error('role_ids.*')<div style="color:#dc2626;font-size:13px;margin-top:6px;">{{ $message }}</div>@enderror
+            </div>
         </div>
 
         <div>
@@ -347,4 +383,105 @@
             }, { passive: false });
         })();
     })();
+</script>
+
+<script>
+    // Role type management
+    let branchRoleCounter = 0;
+    const availableBranches = @json(\App\Models\Branch::orderBy('name')->get(['id', 'name']));
+    const availableRoles = @json($roles->where('is_global', false)->values()->map(function($role) { return ['id' => $role->id, 'name' => $role->name, 'branch_id' => $role->branch_id]; }));
+
+    function toggleRoleType() {
+        const globalChecked = document.getElementById('roleTypeGlobal').checked;
+        const globalSection = document.getElementById('globalRoleSection');
+        const branchSection = document.getElementById('branchRolesSection');
+
+        if (globalChecked) {
+            globalSection.style.display = 'block';
+            branchSection.style.display = 'none';
+            document.getElementById('global_role_id').setAttribute('required', 'required');
+            // Remove all branch role inputs when switching to global
+            document.querySelectorAll('.branch-role-row').forEach(row => row.remove());
+        } else {
+            globalSection.style.display = 'none';
+            branchSection.style.display = 'block';
+            document.getElementById('global_role_id').removeAttribute('required');
+            document.getElementById('global_role_id').value = '';
+            // Ensure at least one branch role row
+            if (document.querySelectorAll('.branch-role-row').length === 0) {
+                addBranchRoleRow();
+            }
+        }
+    }
+
+    function addBranchRoleRow(branchId = '', roleId = '') {
+        const list = document.getElementById('branchRoleList');
+        const row = document.createElement('div');
+        row.className = 'branch-role-row';
+        row.style.cssText = 'display:flex;gap:10px;align-items:center;background:white;padding:12px;border-radius:8px;border:1px solid #e5e7eb;';
+
+        const branchSelect = document.createElement('select');
+        branchSelect.name = 'branch_ids[]';
+        branchSelect.required = true;
+        branchSelect.style.cssText = 'flex:1;padding:10px 12px;border-radius:8px;border:1px solid #d0d7e0;font-size:14px;';
+        branchSelect.innerHTML = '<option value="">-- Select Branch --</option>';
+        availableBranches.forEach(branch => {
+            const option = document.createElement('option');
+            option.value = branch.id;
+            option.textContent = branch.name;
+            if (branch.id == branchId) option.selected = true;
+            branchSelect.appendChild(option);
+        });
+
+        const roleSelect = document.createElement('select');
+        roleSelect.name = 'role_ids[]';
+        roleSelect.required = true;
+        roleSelect.style.cssText = 'flex:1;padding:10px 12px;border-radius:8px;border:1px solid #d0d7e0;font-size:14px;';
+        roleSelect.innerHTML = '<option value="">-- Select Role --</option>';
+        availableRoles.forEach(role => {
+            const option = document.createElement('option');
+            option.value = role.id;
+            option.textContent = role.name;
+            if (role.branch_id) option.textContent += ` (${availableBranches.find(b => b.id == role.branch_id)?.name || 'Branch ' + role.branch_id})`;
+            if (role.id == roleId) option.selected = true;
+            roleSelect.appendChild(option);
+        });
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = '×';
+        removeBtn.onclick = function() { row.remove(); };
+        removeBtn.style.cssText = 'background:#ef4444;color:white;padding:8px 12px;border-radius:8px;font-size:18px;font-weight:700;border:none;cursor:pointer;line-height:1;';
+
+        row.appendChild(branchSelect);
+        row.appendChild(roleSelect);
+        row.appendChild(removeBtn);
+        list.appendChild(row);
+        branchRoleCounter++;
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleRoleType();
+
+        // Load existing branch roles for edit mode
+        @if($user->exists && !$user->global_role_id)
+            @php
+                $userBranches = $user->branches()->get();
+            @endphp
+            @foreach($userBranches as $branch)
+                @php
+                    $roleForBranch = $user->branchRoles()->wherePivot('branch_id', $branch->id)->first();
+                @endphp
+                @if($roleForBranch)
+                    addBranchRoleRow({{ $branch->id }}, {{ $roleForBranch->id }});
+                @endif
+            @endforeach
+        @endif
+
+        // If no rows added yet and branch mode is selected, add an empty row
+        if (!document.getElementById('roleTypeGlobal').checked && document.querySelectorAll('.branch-role-row').length === 0) {
+            addBranchRoleRow();
+        }
+    });
 </script>

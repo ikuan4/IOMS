@@ -76,13 +76,13 @@ class ContractExport implements FromCollection, WithHeadings, WithMapping, WithT
     {
         $latestVersion = $contract->latestVersion;
 
-        $startDate = ($latestVersion && $latestVersion->start_date)
+        $startDate = $latestVersion?->start_date
             ? $latestVersion->start_date->timezone('Asia/Kolkata')->format('Y-m-d H:i:s')
             : 'N/A';
-        $endDate = ($latestVersion && $latestVersion->end_date)
+        $endDate = $latestVersion?->end_date
             ? $latestVersion->end_date->timezone('Asia/Kolkata')->format('Y-m-d H:i:s')
             : 'N/A';
-        $description = ($latestVersion && $latestVersion->description)
+        $description = $latestVersion?->description
             ? $latestVersion->description
             : 'N/A';
 

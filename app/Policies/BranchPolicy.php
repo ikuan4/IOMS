@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\User;
 use App\Models\Branch;
+use Illuminate\Support\Facades\DB;
 
 class BranchPolicy
 {
@@ -21,8 +22,17 @@ class BranchPolicy
             return false;
         }
 
-        // Non-superadmin users can only view their own branch
-        return $branch->id === $user->branch_id;
+        // Branch users can only view branches they're assigned to
+        if (!$user->global_role_id) {
+            $hasAccessToBranch = \DB::table('branch_user')
+                ->where('user_id', $user->id)
+                ->where('branch_id', $branch->id)
+                ->exists();
+            
+            return $hasAccessToBranch;
+        }
+
+        return true;
     }
 
     public function create(User $user): bool
@@ -39,8 +49,17 @@ class BranchPolicy
             return false;
         }
 
-        // Non-superadmin users can only edit their own branch
-        return $branch->id === $user->branch_id;
+        // Branch users can only edit their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $branch->id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function delete(User $user, Branch $branch): bool
@@ -51,8 +70,17 @@ class BranchPolicy
             return false;
         }
 
-        // Non-superadmin users can only delete their own branch
-        return $branch->id === $user->branch_id;
+        // Branch users can only delete their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $branch->id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function restore(User $user, Branch $branch): bool
@@ -63,8 +91,17 @@ class BranchPolicy
             return false;
         }
 
-        // Non-superadmin users can only restore their own branch
-        return $branch->id === $user->branch_id;
+        // Branch users can only restore branches they're assigned to
+        if (!$user->global_role_id) {
+            $hasAccessToBranch = \DB::table('branch_user')
+                ->where('user_id', $user->id)
+                ->where('branch_id', $branch->id)
+                ->exists();
+            
+            return $hasAccessToBranch;
+        }
+
+        return true;
     }
 
     public function export(User $user, Branch $branch): bool
@@ -75,7 +112,16 @@ class BranchPolicy
             return false;
         }
 
-        // Non-superadmin users can only export their own branch
-        return $branch->id === $user->branch_id;
+        // Branch users can only export branches they're assigned to
+        if (!$user->global_role_id) {
+            $hasAccessToBranch = \DB::table('branch_user')
+                ->where('user_id', $user->id)
+                ->where('branch_id', $branch->id)
+                ->exists();
+            
+            return $hasAccessToBranch;
+        }
+
+        return true;
     }
 }

@@ -23,6 +23,19 @@ class RolePolicy
             return true;
         }
 
+        // Branch users can only view branch roles in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+
+            // Can only view roles in active branch
+            if ($role->branch_id !== $activeBranchId) {
+                return false;
+            }
+        }
+
         // Priority hierarchy: user can only view roles with priority >= their own
         $effectiveRole = $user->effectiveRole();
         $userPriority = $effectiveRole ? ($effectiveRole->priority ?? 999) : 999;
@@ -39,12 +52,8 @@ class RolePolicy
 
     public function update(User $user, Role $role): bool
     {
-        // Protect Developer role (ID 1) - only Developer role users can edit it
-        if ($role->id === 1 && !$user->isSuperAdmin()) {
-            return false;
-        }
-
-        if ($role->isSuperAdmin()) {
+        // Protect Developer role - only Developer users can edit it
+        if ($role->isSuperAdmin() && !$user->isSuperAdmin()) {
             return false;
         }
 
@@ -54,6 +63,19 @@ class RolePolicy
 
         if ($user->isSuperAdmin()) {
             return true;
+        }
+
+        // Branch users cannot edit global roles
+        if (!$user->global_role_id && $role->is_global) {
+            return false;
+        }
+
+        // Branch users can only edit branch roles in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId || $role->branch_id !== $activeBranchId) {
+                return false;
+            }
         }
 
         // Priority hierarchy: user can only edit roles with priority > their own (lower privilege)
@@ -70,11 +92,7 @@ class RolePolicy
 
     public function delete(User $user, Role $role): bool
     {
-        // Protect Developer role (ID 1) - cannot be deleted
-        if ($role->id === 1) {
-            return false;
-        }
-
+        // Protect Developer role - cannot be deleted
         if ($role->isSuperAdmin()) {
             return false;
         }
@@ -91,6 +109,19 @@ class RolePolicy
 
         if (!$user->hasPermission('roles.delete')) {
             return false;
+        }
+
+        // Branch users cannot delete global roles
+        if (!$user->global_role_id && $role->is_global) {
+            return false;
+        }
+
+        // Branch users can only delete branch roles in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId || $role->branch_id !== $activeBranchId) {
+                return false;
+            }
         }
 
         // Priority hierarchy: user can only delete roles with priority > their own
@@ -121,8 +152,23 @@ class RolePolicy
             return false;
         }
 
-        if ($user->role_id === $role->id) {
+        // Check if user is trying to edit their own role (use effectiveRole for current role)
+        $effectiveRole = $user->effectiveRole();
+        if ($effectiveRole && $effectiveRole->id === $role->id) {
             return false;
+        }
+
+        // Branch users cannot edit global role permissions
+        if (!$user->global_role_id && $role->is_global) {
+            return false;
+        }
+
+        // Branch users can only edit permissions for roles in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId || $role->branch_id !== $activeBranchId) {
+                return false;
+            }
         }
 
         return $user->hasPermission('permissions.manage') &&
@@ -149,9 +195,17 @@ class RolePolicy
             return true;
         }
 
-        // Check branch match for non-developer users
-        if ($role->branch_id !== $user->branch_id) {
+        // Branch users cannot restore global roles
+        if (!$user->global_role_id && $role->is_global) {
             return false;
+        }
+
+        // Branch users can only restore roles in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId || $role->branch_id !== $activeBranchId) {
+                return false;
+            }
         }
 
         // Priority hierarchy: user can only restore roles with priority > their own

@@ -1,0 +1,117 @@
+<?php $__env->startSection('title', 'Ticket Types'); ?>
+
+<?php $__env->startSection('content'); ?>
+    <div class="header-card">
+        <div class="header-left">
+            <h2>TICKET TYPE MANAGEMENT MODULE</h2>
+            <p class="muted">Manage ticket types and activation state.</p>
+        </div>
+    </div>
+
+    <?php
+        $currentStatus = $status ?? 'all';
+        $baseParams = ['search' => $search];
+
+        $cards = [
+            'all' => [ 'label' => 'All Types', 'count' => $statusCounts['all'] ?? 0, ],
+            'active' => [ 'label' => 'Active Types', 'count' => $statusCounts['active'] ?? 0, ],
+            'inactive' => [ 'label' => 'Inactive Types', 'count' => $statusCounts['inactive'] ?? 0, ],
+            'deleted' => [ 'label' => 'Deleted Types', 'count' => $statusCounts['deleted'] ?? 0, ],
+        ];
+    ?>
+
+    <div style="margin-top:12px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:16px;">
+            <?php $__currentLoopData = $cards; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $key => $card): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                <?php
+                    $isActiveCard = $currentStatus === $key;
+                    $params = array_filter(array_merge($baseParams, ['status' => $key]), fn($v) => $v !== null && $v !== '');
+                ?>
+
+                <a href="<?php echo e(route('ticket-types.index', $params)); ?>" style="text-decoration:none;color:inherit;">
+                    <div class="card" style="padding:16px 18px;border-radius:12px;border:2px solid <?php echo e($isActiveCard ? '#22c55e' : '#e5e7eb'); ?>;box-shadow:<?php echo e($isActiveCard ? '0 0 0 1px rgba(34,197,94,0.15)' : 'none'); ?>;display:flex;flex-direction:column;justify-content:space-between;height:100%;">
+                        <div style="font-size:14px; opacity:0.8;"><?php echo e($card['label']); ?></div>
+                        <div style="margin-top:8px; font-size:24px; font-weight:700;"><?php echo e($card['count']); ?></div>
+                        <?php if($isActiveCard): ?>
+                            <div style="margin-top:8px; font-size:12px; color:#16a34a;">Currently applied to table ↓</div>
+                        <?php else: ?>
+                            <div style="margin-top:8px; font-size:12px; opacity:0.6;">Click to filter table</div>
+                        <?php endif; ?>
+                    </div>
+                </a>
+            <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+        </div>
+    </div>
+
+    <div class="header-right" style="display:flex;gap:12px;align-items:flex-end; margin-top:16px; flex-wrap:wrap;">
+        <form method="GET" action="<?php echo e(route('ticket-types.index')); ?>" id="ticketTypeSearchForm" style="display:flex;gap:12px;align-items:flex-end; flex-wrap:wrap;">
+            <input type="hidden" name="status" value="<?php echo e($status ?? 'all'); ?>">
+            <input type="hidden" name="per_page" id="searchPerPage" value="<?php echo e(request()->query('per_page', 10)); ?>">
+            <input type="text" name="search" id="ticketTypeSearchInput" value="<?php echo e($search); ?>" placeholder="Search by name or description..." oninput="debouncedTicketTypeSearch()" style="padding:14px 16px;border-radius:10px;border:1px solid #d0d7e0;min-width:330px;width:330px;font-size:15px;" />
+        </form>
+
+        <?php if(auth()->user()->isSuperAdmin() || auth()->user()->can('create', \App\Models\TicketType::class)): ?>
+            <a href="<?php echo e(route('ticket-types.create')); ?>" style="background:#22c55e;color:white;padding:10px 24px;border-radius:10px;font-weight:1000;width:220px;display:flex;justify-content:center;align-items:center;gap:8px;white-space:nowrap;text-decoration:none;">
+                <span data-feather="plus"></span>
+                Add Ticket Type
+            </a>
+        <?php endif; ?>
+    </div>
+
+    <div class="card" style="margin-top:12px;overflow:hidden;">
+        <div id="ticketTypesTableWrapper">
+            <?php echo $__env->make('ticket-types._ticket_types_table', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        </div>
+    </div>
+
+    <script>
+        let __ticketTypeSearchTimer = null;
+        function debouncedTicketTypeSearch() {
+            clearTimeout(__ticketTypeSearchTimer);
+            __ticketTypeSearchTimer = setTimeout(() => { ajaxFetchTicketTypes(1); }, 300);
+        }
+
+        function ajaxFetchTicketTypes(page = 1) {
+            const form = document.getElementById('ticketTypeSearchForm');
+            const params = new URLSearchParams(new FormData(form));
+            const perPageSelect = document.getElementById('per_page');
+            if (perPageSelect) params.set('per_page', perPageSelect.value);
+            params.set('page', page);
+            const url = `${location.pathname}?${params.toString()}`;
+
+            fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(r => {
+                    if (!r.ok) throw new Error('Network error');
+                    return r.text();
+                })
+                .then(html => {
+                    document.getElementById('ticketTypesTableWrapper').innerHTML = html;
+                    bindTicketTypePaginationLinks();
+                    try { if (window.feather && typeof window.feather.replace === 'function') window.feather.replace(); } catch (err) { }
+                }).catch(e => {
+                    console.error(e);
+                });
+        }
+
+        function bindTicketTypePaginationLinks(){
+            const wrapper = document.getElementById('ticketTypesTableWrapper');
+            if (!wrapper) return;
+            wrapper.querySelectorAll('a[href]').forEach(a => {
+                const href = a.getAttribute('href');
+                if (!href) return;
+                try {
+                    const url = new URL(href, location.origin);
+                    if (url.searchParams.has('page')) {
+                        a.addEventListener('click', function(ev){ ev.preventDefault(); ajaxFetchTicketTypes(url.searchParams.get('page')); });
+                    }
+                } catch(e) {}
+            });
+        }
+
+        window.addEventListener('load', function(){
+            bindTicketTypePaginationLinks();
+        });
+    </script>
+<?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.dashboard', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH E:\xampp\htdocs\IOMS\resources\views/ticket-types/index.blade.php ENDPATH**/ ?>

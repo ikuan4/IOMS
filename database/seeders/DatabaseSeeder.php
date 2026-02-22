@@ -21,6 +21,8 @@ class DatabaseSeeder extends Seeder
         // Ensure a clean state for roles and users so Developer and FrancisJr are primary
         DB::table('role_has_permissions')->delete();
         DB::table('model_has_roles')->delete();
+        DB::table('branch_user_role')->delete();
+        DB::table('branch_user')->delete();
         DB::table('users')->delete();
         DB::table('roles')->delete();
 

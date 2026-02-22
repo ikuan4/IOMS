@@ -6,16 +6,34 @@
     @php
         /** @var \App\Models\User|null $__u */
         $__u = Auth::user();
-        $canEdit = $__u && (
-            (method_exists($__u, 'hasPermission') && $__u->hasPermission('permissions.manage')) ||
-            (method_exists($__u, 'isSuperAdmin') && $__u->isSuperAdmin())
-        ) && ($__u ? $__u->role_id !== $role->id : false); // Cannot edit own role's permissions
+        $currentRole = $__u ? $__u->effectiveRole() : null;
+        $isSelfRole = $currentRole && $currentRole->id === $role->id;
+        $canEdit = $__u && \Illuminate\Support\Facades\Gate::allows('updatePermissions', $role);
     @endphp
 
     <div class="header-card">
         <div class="header-left">
             <h2>Manage Permissions: {{ $role->name }}</h2>
             <p class="muted">Control what actions users with this role can perform.</p>
+            <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                @if($role->is_global)
+                    <span style="display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1e40af;padding:4px 10px;border-radius:6px;font-weight:700;font-size:12px;">
+                        <span data-feather="globe" style="width:14px;height:14px;"></span>
+                        GLOBAL ROLE
+                    </span>
+                @else
+                    <span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:4px 10px;border-radius:6px;font-weight:700;font-size:12px;">
+                        <span data-feather="map-pin" style="width:14px;height:14px;"></span>
+                        BRANCH ROLE
+                    </span>
+                @endif
+                @if(!$role->is_global && $role->branch)
+                    <span style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;color:#0f172a;padding:4px 10px;border-radius:6px;font-weight:700;font-size:12px;">
+                        <span data-feather="git-branch" style="width:14px;height:14px;"></span>
+                        {{ $role->branch->name }}
+                    </span>
+                @endif
+            </div>
         </div>
     </div>
 

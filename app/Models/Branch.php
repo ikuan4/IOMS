@@ -64,21 +64,22 @@ class Branch extends Model
         return $this->belongsTo(User::class, 'updated_by');
     }
 
-    // HasMany relation roles
+    // HasMany relation roles (branch-specific roles only)
     /**
      * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\Role, $this>
      */
     public function roles() : HasMany
     {
-        return $this->hasMany(Role::class, 'branch_id');
+        return $this->hasMany(Role::class, 'branch_id')->where('is_global', false);
     }
 
-    // HasMany relation users
+    // BelongsToMany relation users (via branch_user pivot)
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany<\App\Models\User, $this>
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\User, $this>
      */
-    public function users() : HasMany
+    public function users(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->hasMany(User::class, 'branch_id');
+        return $this->belongsToMany(User::class, 'branch_user', 'branch_id', 'user_id')
+            ->withTimestamps();
     }
 }

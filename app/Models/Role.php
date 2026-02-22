@@ -57,6 +57,7 @@ class Role extends SpatieRole
         'slug',
         'description',
         'is_active',
+        'is_global',
         'priority',
         'branch_id',
         'created_by',
@@ -68,6 +69,7 @@ class Role extends SpatieRole
     protected $casts = [
         'guard_name' => 'string',
         'is_active' => 'boolean',
+        'is_global' => 'boolean',
         'priority' => 'integer',
         'branch_id' => 'integer',
         'created_by' => 'integer',
@@ -88,11 +90,22 @@ class Role extends SpatieRole
      */
     // Hierarchy functionality removed. Roles are now scoped by `branch_id` and `priority` only.
 
+    /**
+     * Check if this role is a global role (not branch-specific).
+     *
+     * @return bool
+     */
+    public function isGlobal(): bool
+    {
+        return (bool) ($this->is_global ?? false);
+    }
+
     public function isSuperAdmin(): bool
     {
         try {
             $name = strtolower(trim($this->name ?? ''));
-            return $name === 'developer' || ($this->slug ?? '') === 'developer';
+            $isDevRole = $name === 'developer' || ($this->slug ?? '') === 'developer';
+            return $isDevRole && $this->isGlobal();
         } catch (\Throwable $e) {
             return false;
         }
@@ -115,13 +128,48 @@ class Role extends SpatieRole
     }
 
     /**
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\User, $this, \Illuminate\Database\Eloquent\Relations\Pivot, 'pivot'>
+     * Users assigned to this role.
+     * For global roles: via users.global_role_id
+     * For branch roles: via branch_user_role pivot
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany<\App\Models\User, $this>
      */
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
-            ->wherePivot('model_type', User::class)
+        if ($this->isGlobal()) {
+            // For global roles, use the global_role_id FK
+            // Note: BelongsToMany doesn't work well here, so we return a custom query
+            // For now, return empty to avoid breaking existing code
+            return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
+                ->wherePivot('model_type', User::class)
+                ->withTimestamps();
+        }
+
+        // For branch roles, use branch_user_role pivot
+        return $this->belongsToMany(User::class, 'branch_user_role', 'role_id', 'user_id')
+            ->withPivot('branch_id')
             ->withTimestamps();
+    }
+
+    /**
+     * Count users assigned to this role.
+     * For global roles: count users with global_role_id
+     * For branch roles: count via branch_user_role
+     */
+    public function userCount(): int
+    {
+        try {
+            if ($this->isGlobal()) {
+                return User::where('global_role_id', $this->id)->count();
+            }
+
+            return \DB::table('branch_user_role')
+                ->where('role_id', $this->id)
+                ->distinct('user_id')
+                ->count('user_id');
+        } catch (\Throwable $e) {
+            return 0;
+        }
     }
 
     /**
@@ -170,18 +218,6 @@ class Role extends SpatieRole
     }
 
     /**
-     * Count users assigned to this role via direct role_id FK.
-     */
-    public function userCount(): int
-    {
-        try {
-            return User::where('role_id', $this->id)->count();
-        } catch (\Throwable $e) {
-            return 0;
-        }
-    }
-
-    /**
      * Branch this role belongs to (optional)
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\App\Models\Branch, $this>
      */
@@ -224,6 +260,35 @@ class Role extends SpatieRole
     public function scopeByPriority(Builder $query): Builder
     {
         return $query->orderBy('priority', 'asc');
+    }
+
+    /**
+     * Scope to filter only global roles.
+     *
+     * @param Builder<$this> $query
+     * @return Builder<$this>
+     */
+    public function scopeGlobalRoles(Builder $query): Builder
+    {
+        return $query->where('is_global', true)->whereNull('branch_id');
+    }
+
+    /**
+     * Scope to filter only branch-specific roles.
+     *
+     * @param Builder<$this> $query
+     * @param int|null $branchId Optional branch ID to filter by
+     * @return Builder<$this>
+     */
+    public function scopeBranchRoles(Builder $query, ?int $branchId = null): Builder
+    {
+        $query = $query->where('is_global', false)->whereNotNull('branch_id');
+        
+        if ($branchId !== null) {
+            $query = $query->where('branch_id', $branchId);
+        }
+        
+        return $query;
     }
 }
 

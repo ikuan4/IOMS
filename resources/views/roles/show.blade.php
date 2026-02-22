@@ -18,16 +18,35 @@
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
                         <div>
                             <h2 style="margin:0;">{{ $role->name }}</h2>
-                            <div style="color:var(--muted,#6b7280);margin-top:6px;">{{ $role->slug }} @if(optional($role->branch)->name) — {{ $role->branch->name }} @endif</div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                                <span style="color:var(--muted,#6b7280);">{{ $role->slug }}</span>
+                                @if($role->is_global)
+                                    <span style="display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1e40af;padding:4px 10px;border-radius:6px;font-weight:700;font-size:12px;">
+                                        <span data-feather="globe" style="width:14px;height:14px;"></span>
+                                        GLOBAL
+                                    </span>
+                                @else
+                                    <span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:4px 10px;border-radius:6px;font-weight:700;font-size:12px;">
+                                        <span data-feather="map-pin" style="width:14px;height:14px;"></span>
+                                        BRANCH-SPECIFIC
+                                    </span>
+                                @endif
+                            </div>
                         </div>
                     </div>
 
                     <div style="margin-top:18px;display:grid;grid-template-columns:repeat(2, minmax(0,1fr));gap:12px;">
                         <div><strong>Slug:</strong> {{ $role->slug ?? '-' }}</div>
-                        <div><strong>Branch:</strong> {{ optional($role->branch)->name ?? '-' }}</div>
+                        <div><strong>Type:</strong> {{ $role->is_global ? 'Global Role' : 'Branch-Specific Role' }}</div>
 
                         <div><strong>Hierarchy:</strong> {{ $role->parent?->name ? 'Child of: '.$role->parent->name : 'Parent Role' }}</div>
-                        <div><strong>Users Count:</strong> {{ $role->userCount() ?? 0 }}</div>
+                        <div><strong>Users Count:</strong> 
+                            @if($role->is_global)
+                                {{ $role->globalUsers()->count() }}
+                            @else
+                                {{ $role->branchUsers()->count() }}
+                            @endif
+                        </div>
 
                         <div><strong>Status:</strong> @if($role->deleted_at) Deleted @elseif($role->is_active) Active @else Inactive @endif</div>
                         <div><strong>Description:</strong> {{ $role->description ?? '-' }}</div>

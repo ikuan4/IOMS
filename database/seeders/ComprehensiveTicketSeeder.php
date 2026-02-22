@@ -72,10 +72,10 @@ class ComprehensiveTicketSeeder extends Seeder
         foreach ($branches as $branch) {
             $this->command->info("Processing branch: {$branch->name}");
 
-            // Get users from this branch
-            $branchUsers = User::where('branch_id', $branch->id)
-                ->where('active', true)
-                ->get();
+            // Get users assigned to this branch
+            $branchUsers = User::whereHas('branches', function ($q) use ($branch) {
+                $q->where('branch_id', $branch->id);
+            })->where('active', true)->get();
 
             if ($branchUsers->isEmpty()) {
                 $this->command->warn("  No active users in {$branch->name}. Skipping...");

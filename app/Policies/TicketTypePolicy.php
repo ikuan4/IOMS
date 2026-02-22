@@ -21,7 +21,17 @@ class TicketTypePolicy
             return false;
         }
 
-        return $ticketType->branch_id === $user->branch_id;
+        // Branch users can only view ticket types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function create(User $user): bool
@@ -38,7 +48,17 @@ class TicketTypePolicy
             return false;
         }
 
-        return $ticketType->branch_id === $user->branch_id;
+        // Branch users can only edit ticket types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function delete(User $user, TicketType $ticketType): bool
@@ -49,7 +69,17 @@ class TicketTypePolicy
             return false;
         }
 
-        return $ticketType->branch_id === $user->branch_id;
+        // Branch users can only delete ticket types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function restore(User $user, TicketType $ticketType): bool
@@ -60,6 +90,16 @@ class TicketTypePolicy
             return false;
         }
 
-        return $ticketType->branch_id === $user->branch_id;
+        // Branch users can only restore ticket types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 }

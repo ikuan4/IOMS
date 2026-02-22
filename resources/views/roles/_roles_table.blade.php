@@ -7,7 +7,7 @@
     <thead>
     <tr style="text-align:left; border-bottom:1px solid #e5e7eb;">
         <th style="padding:8px;">Role Name</th>
-        <th style="padding:8px;">Branch</th>
+        <th style="padding:8px;">Type</th>
         <th style="padding:8px;">Hierarchy</th>
         <th style="padding:8px;">Status</th>
         <th style="padding:8px;">Users</th>
@@ -25,8 +25,9 @@
             @continue
         @endif
         @php
+            $currentUserRole = $currentUser ? $currentUser->effectiveRole() : null;
             // Hide user's own role if they have edit permissions (prevents self-modification)
-            $hideOwnRole = $currentUser && method_exists($currentUser, 'hasPermission') && $currentUser->hasPermission('roles.edit') && $currentUser->role_id === $role->id;
+            $hideOwnRole = $currentUser && method_exists($currentUser, 'hasPermission') && $currentUser->hasPermission('roles.edit') && $currentUserRole && $currentUserRole->id === $role->id;
         @endphp
         @if(!$hideOwnRole)
         <tr class="role-table-row {{ request('role_id') == $role->id ? 'role-selected' : '' }}"
@@ -51,10 +52,16 @@
             </td>
 
             <td style="padding:8px;">
-                @if($role->branch)
-                    <span style="background:#f1f5f9;color:#0f172a;padding:6px 10px;border-radius:6px;font-size:13px;font-weight:700;">{{ $role->branch->name }}</span>
+                @if($role->is_global)
+                    <span style="display:inline-flex;align-items:center;gap:4px;background:#dbeafe;color:#1e40af;padding:6px 10px;border-radius:6px;font-size:13px;font-weight:700;">
+                        <span data-feather="globe" style="width:14px;height:14px;"></span>
+                        Global
+                    </span>
                 @else
-                    <span class="muted">—</span>
+                    <span style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;padding:6px 10px;border-radius:6px;font-size:13px;font-weight:700;">
+                        <span data-feather="map-pin" style="width:14px;height:14px;"></span>
+                        Branch
+                    </span>
                 @endif
             </td>
             <td style="padding:8px;">
@@ -75,7 +82,11 @@
             </td>
             <td style="padding:8px;">
                 <span style="background:#dbeafe;color:#1e40af;padding:4px 12px;border-radius:6px;font-weight:600;font-size:13px;">
-                    {{ $role->userCount() }}
+                    @if($role->is_global)
+                        {{ $role->globalUsers()->count() }}
+                    @else
+                        {{ $role->branchUsers()->count() }}
+                    @endif
                 </span>
             </td>
             <td style="padding:8px; text-align:right; white-space:nowrap;" onclick="event.stopPropagation();">
@@ -101,7 +112,7 @@
                         @if(\Illuminate\Support\Facades\Gate::allows('managePermissions', $role))
                         @php
                             $canEditPermissions = (($currentUser && method_exists($currentUser, 'hasPermission') && $currentUser->hasPermission('permissions.manage')) || ($currentUser && method_exists($currentUser, 'isSuperAdmin') && $currentUser->isSuperAdmin())) &&
-                                                ($currentUser ? $currentUser->role_id !== $role->id : false); // Cannot edit own role's permissions
+                                                ($currentUserRole && $currentUserRole->id !== $role->id); // Cannot edit own role's permissions
                         @endphp
                         <a
                             href="{{ route('roles.permissions', $role->id) }}"

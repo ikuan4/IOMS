@@ -42,6 +42,7 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'Delete Branch', 'slug' => 'branches.delete', 'group' => 'branches', 'guard_name' => 'web'],
             ['name' => 'Restore Branch', 'slug' => 'branches.restore', 'group' => 'branches', 'guard_name' => 'web'],
             ['name' => 'Export Branch Data', 'slug' => 'branches.export', 'group' => 'branches', 'guard_name' => 'web'],
+            ['name' => 'Assign Users to Branches', 'slug' => 'branches.assign-users', 'group' => 'branches', 'guard_name' => 'web'],
 
             // Permissions (Role Permission Management)
             ['name' => 'View Permissions', 'slug' => 'permissions.view', 'group' => 'permissions', 'guard_name' => 'web'],
@@ -104,7 +105,7 @@ class RolePermissionSeeder extends Seeder
             );
         }
 
-        // Ensure a single Developer role exists, but use DB operations to be schema-safe
+        // Ensure a single Developer role exists as GLOBAL with priority=1
         $roleData = ['name' => 'Developer'];
         if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'slug')) {
             $roleData['slug'] = 'developer';
@@ -117,6 +118,15 @@ class RolePermissionSeeder extends Seeder
         }
         if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'guard_name')) {
             $roleData['guard_name'] = 'web';
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'is_global')) {
+            $roleData['is_global'] = true;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'priority')) {
+            $roleData['priority'] = 1;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'branch_id')) {
+            $roleData['branch_id'] = null;
         }
 
         DB::table('roles')->updateOrInsert(

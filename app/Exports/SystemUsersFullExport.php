@@ -54,11 +54,18 @@ class SystemUsersFullExport implements FromQuery, WithHeadings, WithMapping, Wit
             ->withTrashed()
             ->with([
                 'roles',
-                'createdBy:id,name,email',
-                'updatedBy:id,name,email',
-                'deletedBy:id,name,email',
-                'restoredBy:id,name,email',
-                'role' => function ($q) {
+                'globalRole' => function ($q) {
+                    $q->withTrashed();
+                },
+                'branches' => function ($q) {
+                    $q->withTrashed()->with([
+                        'createdBy:id,name,email',
+                        'updatedBy:id,name,email',
+                        'deletedBy:id,name,email',
+                        'restoredBy:id,name,email',
+                    ]);
+                },
+                'branchRoles' => function ($q) {
                     $q->withTrashed()->with([
                         'branch' => fn($b) => $b->withTrashed(),
                         'createdBy:id,name,email',
@@ -67,8 +74,13 @@ class SystemUsersFullExport implements FromQuery, WithHeadings, WithMapping, Wit
                         'restoredBy:id,name,email',
                     ]);
                 },
-                'branch' => function ($q) {
+                'createdBy:id,name,email',
+                'updatedBy:id,name,email',
+                'deletedBy:id,name,email',
+                'restoredBy:id,name,email',
+                'role' => function ($q) {
                     $q->withTrashed()->with([
+                        'branch' => fn($b) => $b->withTrashed(),
                         'createdBy:id,name,email',
                         'updatedBy:id,name,email',
                         'deletedBy:id,name,email',
@@ -144,10 +156,14 @@ class SystemUsersFullExport implements FromQuery, WithHeadings, WithMapping, Wit
             $row[] = $this->stringify($user->getAttribute($col));
         }
 
-        $effectiveRole = $user->effectiveRole();
+        $effectiveRole = $user->globalRole ?: $user->branchRoles->first();
         $row[] = $this->stringify($effectiveRole?->name);
         $row[] = $this->stringify($effectiveRole?->slug);
-        $row[] = $this->stringify($user->roles->pluck('name')->join('|'));
+        $pivotRoleNames = $user->roles->pluck('name');
+        if ($pivotRoleNames->isEmpty()) {
+            $pivotRoleNames = $user->branchRoles->pluck('name');
+        }
+        $row[] = $this->stringify($pivotRoleNames->join('|'));
 
         $row[] = $this->stringify($user->createdBy?->name);
         $row[] = $this->stringify($user->createdBy?->email);
@@ -172,7 +188,7 @@ class SystemUsersFullExport implements FromQuery, WithHeadings, WithMapping, Wit
         $row[] = $this->stringify($role?->restoredBy?->name);
         $row[] = $this->stringify($role?->restoredBy?->email);
 
-        $branch = $user->branch;
+        $branch = $user->branches->first();
         foreach ($this->branchColumns as $col) {
             $row[] = $this->stringify($branch?->getAttribute($col));
         }

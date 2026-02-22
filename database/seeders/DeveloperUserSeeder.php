@@ -13,8 +13,8 @@ class DeveloperUserSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
-            // Ensure Developer role exists for other purposes
-            $roleData = ['name' => 'Developer'];
+            // Ensure Developer role exists as global role with priority=1
+            $roleData = ['name' => 'Developer', 'is_global' => true, 'priority' => 1, 'branch_id' => null];
             if (\Illuminate\Support\Facades\Schema::hasColumn('roles', 'slug')) {
                 $roleData['slug'] = 'developer';
             }
@@ -23,7 +23,10 @@ class DeveloperUserSeeder extends Seeder
                 array_merge($roleData, ['updated_at' => now(), 'created_at' => now()])
             );
 
-            // Create or update developer user with null role_id and branch_id
+            // Get the Developer role ID
+            $developerRoleId = DB::table('roles')->where('name', 'Developer')->value('id');
+
+            // Create or update developer user with global_role_id
             $user = User::withTrashed()->where('email', 'ikuan4@gmail.com')->first();
 
             if ($user) {
@@ -36,8 +39,7 @@ class DeveloperUserSeeder extends Seeder
                     'password' => 'password@123',
                     'mobile' => $user->mobile ?? '0000000000',
                     'active' => true,
-                    'role_id' => null,
-                    'branch_id' => null,
+                    'global_role_id' => $developerRoleId,
                 ]);
             } else {
                 User::create([
@@ -46,13 +48,11 @@ class DeveloperUserSeeder extends Seeder
                     'password' => 'password@123',
                     'mobile' => '0000000000',
                     'active' => true,
-                    'role_id' => null,
-                    'branch_id' => null,
+                    'global_role_id' => $developerRoleId,
                 ]);
             }
 
-            // Remove all other users to ensure only FrancisJr remains
-            User::where('email', '!=', 'ikuan4@gmail.com')->delete();
+            // Do not remove other users; keep branch users for validation and testing
         });
     }
 }

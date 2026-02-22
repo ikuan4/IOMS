@@ -21,7 +21,17 @@ class TicketModulePolicy
             return false;
         }
 
-        return $ticketModule->branch_id === $user->branch_id;
+        // Branch users can only view ticket modules in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketModule->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function create(User $user): bool
@@ -38,7 +48,17 @@ class TicketModulePolicy
             return false;
         }
 
-        return $ticketModule->branch_id === $user->branch_id;
+        // Branch users can only edit ticket modules in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketModule->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function delete(User $user, TicketModule $ticketModule): bool
@@ -49,7 +69,17 @@ class TicketModulePolicy
             return false;
         }
 
-        return $ticketModule->branch_id === $user->branch_id;
+        // Branch users can only delete ticket modules in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketModule->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function restore(User $user, TicketModule $ticketModule): bool
@@ -60,6 +90,16 @@ class TicketModulePolicy
             return false;
         }
 
-        return $ticketModule->branch_id === $user->branch_id;
+        // Branch users can only restore ticket modules in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $ticketModule->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 }

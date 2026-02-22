@@ -35,9 +35,11 @@ class BranchController extends Controller
         // include trashed so deleted branches can be restored from the index
         $query = Branch::withTrashed();
 
-        // Non-superadmin users can only see their own branch
+        // Non-superadmin users can only see branches they're assigned to
         if ($currentUser && !$currentUser->isSuperAdmin()) {
-            $query->where('id', $currentUser->branch_id);
+            $query->whereHas('users', function($userQuery) use ($currentUser) {
+                $userQuery->where('user_id', $currentUser->id);
+            });
         }
 
         if ($request->has('search') && $request->search) {
@@ -96,7 +98,8 @@ class BranchController extends Controller
     {
         $this->authorize('view', $branch);
 
-        $usersQuery = $branch->users()->with('role');
+        // Get users in this branch via branch_user pivot
+        $usersQuery = $branch->users()->with(['globalRole', 'branchRoles']);
         if ($request->filled('search')) {
             $s = (string) $request->search;
             $usersQuery->where(function($q) use ($s) {
@@ -136,7 +139,7 @@ class BranchController extends Controller
     {
         $this->authorize('export', $branch);
 
-        $usersQuery = $branch->users()->with('role');
+        $usersQuery = $branch->users()->with(['globalRole', 'branchRoles']);
         if ($request->filled('search')) {
             $s = (string) $request->search;
             $usersQuery->where(function($q) use ($s) {

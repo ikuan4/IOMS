@@ -12,11 +12,20 @@ class DummyUsersSeeder extends Seeder
 {
     public function run()
     {
-        $roles = Role::where('is_active', 1)->where('name', '!=', 'Developer')->get();
+        // Only seed branch roles (not global roles) for testing purposes
+        $roles = Role::where('is_active', 1)
+            ->where('name', '!=', 'Developer')
+            ->where('is_global', false)
+            ->whereNotNull('branch_id')
+            ->get();
 
         if ($roles->isEmpty()) {
             $this->call([BranchSeeder::class, DummyRolesSeeder::class]);
-            $roles = Role::where('is_active', 1)->where('name', '!=', 'Developer')->get();
+            $roles = Role::where('is_active', 1)
+                ->where('name', '!=', 'Developer')
+                ->where('is_global', false)
+                ->whereNotNull('branch_id')
+                ->get();
         }
 
         // Indian first names
@@ -65,19 +74,40 @@ class DummyUsersSeeder extends Seeder
                     $mobile = $this->generateIndianMobile();
                 }
 
+                // Create user without role_id or branch_id (new structure)
                 $user = User::create([
                     'name' => $fullName,
                     'email' => $email,
                     'password' => 'password',
                     'mobile' => $mobile,
                     'active' => 1,
-                    'branch_id' => $role->branch_id,
-                    'role_id' => $role->id,
+                    'global_role_id' => null, // Branch users have null global_role_id
                 ]);
 
-                // Ensure pivot mapping for Spatie's model_has_roles table
+                // Assign user to branch via branch_user pivot
+                \DB::table('branch_user')->insert([
+                    'user_id' => $user->id,
+                    'branch_id' => $role->branch_id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                // Assign role via branch_user_role pivot
+                \DB::table('branch_user_role')->insert([
+                    'user_id' => $user->id,
+                    'branch_id' => $role->branch_id,
+                    'role_id' => $role->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                // Ensure pivot mapping for Spatie's model_has_roles table (if still using)
                 try {
-                    $role->users()->attach($user->id);
+                    \DB::table('model_has_roles')->insert([
+                        'role_id' => $role->id,
+                        'model_type' => 'App\\Models\\User',
+                        'model_id' => $user->id,
+                    ]);
                 } catch (\Exception $e) {
                     // ignore duplicates
                 }

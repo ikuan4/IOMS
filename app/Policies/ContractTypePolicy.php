@@ -21,8 +21,17 @@ class ContractTypePolicy
             return false;
         }
 
-        // Non-superadmin users can only view contract types from their own branch
-        return $contractType->branch_id === $user->branch_id;
+        // Branch users can only view contract types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contractType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function create(User $user): bool
@@ -39,8 +48,17 @@ class ContractTypePolicy
             return false;
         }
 
-        // Non-superadmin users can only edit contract types from their own branch
-        return $contractType->branch_id === $user->branch_id;
+        // Branch users can only edit contract types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contractType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function delete(User $user, ContractType $contractType): bool
@@ -51,8 +69,17 @@ class ContractTypePolicy
             return false;
         }
 
-        // Non-superadmin users can only delete contract types from their own branch
-        return $contractType->branch_id === $user->branch_id;
+        // Branch users can only delete contract types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contractType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function restore(User $user, ContractType $contractType): bool
@@ -63,8 +90,17 @@ class ContractTypePolicy
             return false;
         }
 
-        // Non-superadmin users can only restore contract types from their own branch
-        return $contractType->branch_id === $user->branch_id;
+        // Branch users can only restore contract types in their active branch
+        if (!$user->global_role_id) {
+            $activeBranchId = session('active_branch_id');
+            if (!$activeBranchId) {
+                return false;
+            }
+            
+            return $contractType->branch_id === $activeBranchId;
+        }
+
+        return true;
     }
 
     public function export(User $user): bool

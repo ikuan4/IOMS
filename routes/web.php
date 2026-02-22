@@ -10,6 +10,8 @@ use App\Http\Controllers\TicketTypeController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\TicketAttachmentController;
 use App\Http\Controllers\AuditLogController;
+use App\Http\Controllers\BranchSwitchController;
+use App\Models\Role;
 
 // Landing → login page
 Route::get('/', function () {
@@ -43,6 +45,59 @@ Route::post('/login', function (Request $request) {
     }
 
     if ($attempt) {
+        $user = Auth::user();
+
+        if (!$user || !$user->active) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                $errorKey => 'Your account is inactive. Please contact administrator.',
+            ])->withInput();
+        }
+
+        // Validate global role (active, not deleted, global)
+        $hasGlobalRole = false;
+        if ($user->global_role_id !== null) {
+            $hasGlobalRole = Role::where('id', $user->global_role_id)
+                ->whereNull('deleted_at')
+                ->where('is_active', true)
+                ->where('is_global', true)
+                ->exists();
+        }
+
+        // Validate branch role assignments (active role + active branch)
+        $validBranch = \DB::table('branch_user_role as bur')
+            ->join('roles as r', 'r.id', '=', 'bur.role_id')
+            ->join('branches as b', 'b.id', '=', 'bur.branch_id')
+            ->where('bur.user_id', $user->id)
+            ->whereNull('r.deleted_at')
+            ->whereNull('b.deleted_at')
+            ->where('r.is_active', true)
+            ->where('r.is_global', false)
+            ->select('bur.branch_id')
+            ->first();
+        $hasBranchRoles = (bool) $validBranch;
+
+        // Block login if user has no roles
+        if (!$hasGlobalRole && !$hasBranchRoles) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return back()->withErrors([
+                $errorKey => 'Your account does not have any assigned role. Please contact administrator.',
+            ])->withInput();
+        }
+
+        // Initialize or clear active branch
+        if (!$hasGlobalRole && $hasBranchRoles) {
+            session(['active_branch_id' => $validBranch->branch_id]);
+        } else {
+            $request->session()->forget('active_branch_id');
+        }
+
         $request->session()->regenerate();
         return redirect()->intended('/dashboard');
     }
@@ -57,6 +112,10 @@ Route::post('/logout', function (Request $request) {
     Auth::logout();
     $request->session()->invalidate();
     $request->session()->regenerateToken();
+    
+    // Clear active branch from session
+    $request->session()->forget('active_branch_id');
+    
     return redirect()->route('login');
 })->name('logout');
 
@@ -64,6 +123,13 @@ Route::post('/logout', function (Request $request) {
 Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware('auth')->name('dashboard');
+
+// Branch switching (requires auth) - Phase 3
+Route::middleware('auth')->group(function () {
+    Route::get('/branches/switch', [BranchSwitchController::class, 'index'])->name('branches.switch');
+    Route::post('/branches/switch', [BranchSwitchController::class, 'switch'])->name('branches.switch.post');
+    Route::get('/branches/current', [BranchSwitchController::class, 'current'])->name('branches.current');
+});
 
 // Roles management (requires auth)
 Route::middleware('auth')->group(function () {

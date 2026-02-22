@@ -30,18 +30,30 @@
                 @endif
             </td>
             <td style="padding:8px;">
-                @php
-                    $displayRole = null;
-                    if (method_exists($user, 'effectiveRole')) {
-                        $displayRole = $user->effectiveRole();
-                    } else {
-                        $displayRole = $user->role ?? null;
-                    }
-                @endphp
-                @if($displayRole)
-                    <span style="background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:600;">{{ $displayRole->name }}</span>
+                @if($user->global_role_id)
+                    @php $globalRole = $user->globalRole; @endphp
+                    @if($globalRole)
+                        <span style="background:#e0f2fe;color:#0369a1;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:600;">{{ $globalRole->name }}</span>
+                        @if($globalRole->is_global)
+                            <span style="display:inline-block;margin-left:4px;font-size:10px;color:#6b7280;">(Global)</span>
+                        @endif
+                    @else
+                        <span class="muted">Unknown Role</span>
+                    @endif
                 @else
-                    <span class="muted">No Role</span>
+                    @php 
+                        $branchCount = $user->branches->count();
+                        $firstBranch = $user->branches->first();
+                        $roleForFirstBranch = $firstBranch ? $user->branchRoles()->wherePivot('branch_id', $firstBranch->id)->first() : null;
+                    @endphp
+                    @if($roleForFirstBranch)
+                        <span style="background:#dcfce7;color:#15803d;padding:4px 12px;border-radius:6px;font-size:13px;font-weight:600;">{{ $roleForFirstBranch->name }}</span>
+                        @if($branchCount > 1)
+                            <span style="display:inline-block;margin-left:4px;font-size:10px;color:#6b7280;">+{{ $branchCount - 1 }} more</span>
+                        @endif
+                    @else
+                        <span class="muted">No Roles</span>
+                    @endif
                 @endif
             </td>
             <td style="padding:8px;">{{ $user->mobile }}</td>

@@ -12,15 +12,25 @@
             <tr style="border-bottom:1px solid #f3f4f6;">
                 <td style="padding:8px;">{{ $user->name }}</td>
                 <td style="padding:8px;">{{ $user->email }}</td>
-                @php
-                    $displayRole = null;
-                    if (method_exists($user, 'effectiveRole')) {
-                        $displayRole = $user->effectiveRole();
-                    } else {
-                        $displayRole = $user->role ?? null;
-                    }
-                @endphp
-                <td style="padding:8px;">@if($displayRole) <span style="background:#e0f2fe;color:#0369a1;padding:4px 8px;border-radius:6px;font-size:13px;font-weight:600;">{{ $displayRole->name }}</span> @else <span class="muted">No Role</span> @endif</td>
+                <td style="padding:8px;">
+                    @if($user->global_role_id)
+                        <span style="background:#dbeafe;color:#1e40af;padding:4px 8px;border-radius:6px;font-size:13px;font-weight:600;">
+                            {{ optional($user->globalRole)->name ?? 'Unknown Role' }}
+                            <span style="font-size:11px;opacity:0.8;margin-left:6px;">Global</span>
+                        </span>
+                    @else
+                        @php
+                            $branchRole = $user->roleForBranch($branch->id);
+                        @endphp
+                        @if($branchRole)
+                            <span style="background:#dcfce7;color:#166534;padding:4px 8px;border-radius:6px;font-size:13px;font-weight:600;">
+                                {{ $branchRole->name }}
+                            </span>
+                        @else
+                            <span class="muted">No Role</span>
+                        @endif
+                    @endif
+                </td>
                 <td style="padding:8px; text-align:right; white-space:nowrap;">
                     @if(auth()->user()->can('view', $user))
                         <a href="{{ route('users.show', $user->id) }}" title="View" style="background:#eef2ff;color:#3730a3;padding:10px 12px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;border:none;text-decoration:none;margin-right:6px;font-size:15px;">
